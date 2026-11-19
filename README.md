@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.0
+node dist/cli.js --version   # 0.1.1
 ```
 
 Examples below write `genai-codemod` for `node dist/cli.js`. Run `npm link` once if you want that name on your PATH.
@@ -182,7 +182,7 @@ Warnings have codes too: `api-version-pinned`, `api-version-default-changed`, `v
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -274,7 +274,7 @@ flowchart LR
 
 ## Limitations and roadmap
 
-Known limits in 0.1.0:
+Known limits in 0.1.1:
 - Shared clients are followed only between files scanned in the same run. Re-exports (`export { genAI } from "./client"`) and namespace imports (`import * as c`) are not followed. Importers outside the scanned paths cannot be seen: the `client-shared` warning reminds you, and a `client-exported` TODO appears when no scanned file imports the client.
 - Exported model handles (`export const model = genAI.getGenerativeModel(...)`) are not moved: `handle-escapes` where defined, `cross-module` where imported. Clients or chats stored in class fields are reported as TODOs, not tracked.
 - Request-object calls such as `generateContent({ contents })` and `embedContent({ content, taskType })` are reported as `dynamic-model-params`.

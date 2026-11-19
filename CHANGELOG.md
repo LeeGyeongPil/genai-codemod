@@ -3,6 +3,15 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-11-19
+
+### Fixed
+- `verify` no longer picks up temporary modules created by other test processes while scanning, which made parallel test runs flaky.
+
+### Changed
+- Package metadata: added `repository`, `homepage` and `bugs` fields.
+- Version bumped to 0.1.1 in `package.json`, `package-lock.json` and the README examples.
+
 ## [0.1.0] - 2026-11-19
 
 ### Added
