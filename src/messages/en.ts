@@ -35,7 +35,7 @@ verify runs YOUR code (the entry function) with a fake fetch; use it on code you
   "err.badApiVersion": "Invalid --api-version value \"{value}\". Use keep or sdk-default.",
   "err.badLang": "Invalid --lang value \"{value}\". Use en or ko.",
   "err.badResponse": "Invalid --response value \"{value}\". Use ok or blocked.",
-  "err.badTimeout": "Invalid --timeout value \"{value}\". Use a number of seconds greater than 0, e.g. --timeout 120.",
+  "err.badTimeout": "Invalid --timeout value \"{value}\". Use a number of seconds greater than 0 and at most {max}, e.g. --timeout 120.",
   "err.entryTimeout": "{file}: \"{entry}\" did not finish within {seconds} s, so verify stopped. It probably waits for something that never ends (a stream, timer or connection the mock does not answer). Make the function return, or allow more time with --timeout <seconds>.",
   "err.writeAndOut": "--write and --out-dir cannot be used together. Pick one.",
   "err.nodeVersion": "genai-codemod needs Node.js 22 or newer (found {found}). Upgrade Node.js and run it again.",

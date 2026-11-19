@@ -20,6 +20,11 @@ export interface RunOptions {
 }
 
 export const DEFAULT_TIMEOUT_SECONDS = 60;
+/**
+ * Largest limit setTimeout can hold (2^31-1 ms, about 24.8 days). Above it Node warns and fires after
+ * 1 ms, so the CLI rejects bigger values and the library caps them.
+ */
+export const MAX_TIMEOUT_SECONDS = 2_147_483;
 
 /** Temp modules that exist right now; removeTempModules() deletes them when the CLI is interrupted. */
 const liveTempModules = new Set<string>();
@@ -36,7 +41,8 @@ export function removeTempModules(): void {
 async function withTimeout<T>(work: Promise<T>, seconds: number, vars: { file: string; entry: string }): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const deadline = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new VerifyError("err.entryTimeout", { ...vars, seconds })), seconds * 1000);
+    const ms = Math.min(seconds, MAX_TIMEOUT_SECONDS) * 1000;
+    timer = setTimeout(() => reject(new VerifyError("err.entryTimeout", { ...vars, seconds })), ms);
   });
   try {
     return await Promise.race([work, deadline]);

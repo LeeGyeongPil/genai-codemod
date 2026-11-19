@@ -17,7 +17,7 @@ import {
 } from "./transform/index.js";
 import { VerifyError } from "./verify/errors.js";
 import { verifyFiles } from "./verify/index.js";
-import { DEFAULT_TIMEOUT_SECONDS } from "./verify/run.js";
+import { DEFAULT_TIMEOUT_SECONDS, MAX_TIMEOUT_SECONDS } from "./verify/run.js";
 
 // cli.ts deletes leftover temp modules when the user presses Ctrl+C during verify.
 export { removeTempModules } from "./verify/run.js";
@@ -121,7 +121,10 @@ async function runVerify(files: string[], values: Values, io: Io, lang: Lang, fa
   if (response !== "ok" && response !== "blocked") return fail("err.badResponse", { value: response });
   // seconds each entry function may run before verify stops it (it never waits forever)
   const timeout = values.timeout === undefined ? DEFAULT_TIMEOUT_SECONDS : Number(values.timeout);
-  if (!Number.isFinite(timeout) || timeout <= 0) return fail("err.badTimeout", { value: values.timeout ?? "" });
+  // above MAX_TIMEOUT_SECONDS a Node timer would fire at once, so such values are refused too
+  if (!Number.isFinite(timeout) || timeout <= 0 || timeout > MAX_TIMEOUT_SECONDS) {
+    return fail("err.badTimeout", { value: values.timeout ?? "", max: MAX_TIMEOUT_SECONDS });
+  }
   try {
     const result = await verifyFiles(
       resolve(io.cwd, before),

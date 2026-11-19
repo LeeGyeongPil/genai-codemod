@@ -1,10 +1,11 @@
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 import { byName, collectFiles, VERIFY_TEMP_PREFIX } from "../src/project.js";
 import { transformSource } from "../src/transform/index.js";
 import { verifyFiles } from "../src/verify/index.js";
+import { MAX_TIMEOUT_SECONDS } from "../src/verify/run.js";
 import { CHILD, fixture, read, root, runCli, scratch } from "./helpers.js";
 
 const ok = { entry: "run", response: "ok", vertex: false } as const;
@@ -174,7 +175,8 @@ describe("shared client across modules (Q-1)", () => {
     expect(res.code).toBe(1);
     expect(codes(res.stdout)).toEqual(["src/client.ts:3 client-exported", "src/client.ts:3 api-version-pinned"]);
     const ko = await runCli(["src/client.ts", "--lang", "ko"], {}, dir);
-    expect(ko.stdout).toContain('이 클라이언트는 "genAI" 으로 export 되고');
+    // particle-neutral wording ("이름으로"), whatever the exported name ends with (F-2)
+    expect(ko.stdout).toContain('이 클라이언트는 "genAI" 이름으로 export 되고');
   });
 
   it("scanning only the importer (or after the client was written) reports cross-module (exit 1)", async () => {
@@ -324,15 +326,19 @@ describe("verify never waits forever", () => {
       cwd: dir,
     });
     expect(ko.status).toBe(2);
-    expect(ko.stderr).toContain('old.ts: "run" 가 0.5초 안에 끝나지 않아');
+    expect(ko.stderr).toContain('old.ts: "run" 함수가 0.5초 안에 끝나지 않아');
   });
 
-  it("rejects a --timeout that is not a positive number", async () => {
-    for (const value of ["0", "-3", "soon"]) {
+  it("rejects a --timeout that is not a positive number, or too large for a timer", async () => {
+    // 9999999 s is above setTimeout's limit (2^31-1 ms): Node would fire after 1 ms (QA Q-1)
+    for (const value of ["0", "-3", "soon", "9999999"]) {
       const res = await runCli(["verify", "a.ts", "b.ts", `--timeout=${value}`]);
       expect(res.code).toBe(2);
       expect(res.stderr).toContain(`Invalid --timeout value "${value}"`);
+      expect(res.stderr).toContain(`at most ${MAX_TIMEOUT_SECONDS}`);
     }
+    const ko = await runCli(["verify", "a.ts", "b.ts", "--timeout=9999999", "--lang", "ko"]);
+    expect(ko.stderr).toContain('--timeout 값이 올바르지 않습니다: "9999999"');
     // "--timeout -3" looks like an option to parseArgs: a usage error, with one period, not ".."
     const ambiguous = await runCli(["verify", "a.ts", "b.ts", "--timeout", "-3"]);
     expect(ambiguous.code).toBe(2);
@@ -347,8 +353,21 @@ describe("verify never waits forever", () => {
     expect(leftovers(dir)).toEqual([]);
   });
 
-  it("Ctrl+C during verify removes the temp module and exits 130", async () => {
-    const dir = project("hang-sigint", { "old.ts": HANG, "new.ts": HANG });
+  it("the in-process API caps a huge limit instead of firing at once", async () => {
+    // before the cap, setTimeout(1e12 ms) overflowed to 1 ms and a normal entry "timed out" at once
+    const done = 'export async function run() {\n  await new Promise((r) => setTimeout(r, 50));\n  return "done";\n}\n';
+    const dir = project("huge-timeout", { "old.ts": done });
+    const file = join(dir, "old.ts");
+    const verified = await verifyFiles(file, file, { ...ok, timeoutSeconds: 1e9 }, "en");
+    expect(verified.match).toBe(true);
+  });
+
+  // Ctrl+C sends SIGINT, `kill` and CI runners send SIGTERM; both must clean up (QA Q-2)
+  it.each([
+    ["SIGINT", 130],
+    ["SIGTERM", 143],
+  ] as const)("%s during verify removes the temp module and exits %i", async (signal, exitCode) => {
+    const dir = project(`hang-${signal.toLowerCase()}`, { "old.ts": HANG, "new.ts": HANG });
     const child = spawn(process.execPath, [join(root, "dist", "cli.js"), "--lang", "en", "verify", "old.ts", "new.ts"], {
       cwd: dir,
       stdio: "ignore",
@@ -359,11 +378,58 @@ describe("verify never waits forever", () => {
       const deadline = Date.now() + 30_000;
       while (leftovers(dir).length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
       expect(leftovers(dir)).toHaveLength(1);
-      child.kill("SIGINT");
-      expect(await exited).toBe(130);
+      child.kill(signal);
+      expect(await exited).toBe(exitCode);
       expect(leftovers(dir)).toEqual([]);
     } finally {
       child.kill("SIGKILL"); // no-op when it already ended
     }
   }, 60_000);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Round 8 (CI on a Linux runner): guards for things that work in a macOS checkout but break on Linux.
+
+describe("the checkout also works on a Linux CI runner", () => {
+  type LockEntry = { os?: string[]; cpu?: string[]; libc?: string[]; resolved?: string; integrity?: string; optionalDependencies?: Record<string, string> };
+
+  // tsc (TypeScript 7) and vitest's bundler (rolldown) are native binaries picked per platform. A lockfile
+  // written on one OS without the other platforms' optional packages makes `npm ci` skip them there
+  // (npm/cli#4828), and the Linux job fails with "Unable to resolve @typescript/typescript-linux-x64".
+  it.each(["typescript", "rolldown"])("package-lock.json has the %s native package for Linux x64 and macOS arm64", (name) => {
+    const lock = JSON.parse(read(join(root, "package-lock.json"))) as { packages: Record<string, LockEntry> };
+    const optional = Object.keys(lock.packages[`node_modules/${name}`]?.optionalDependencies ?? {});
+    const natives = optional.map((dep) => lock.packages[`node_modules/${dep}`]);
+    const has = (os: string, cpu: string): boolean =>
+      natives.some((n) => !!n?.os?.includes(os) && !!n.cpu?.includes(cpu) && (!n.libc || n.libc.includes("glibc")) && !!n.resolved && !!n.integrity);
+    expect({ linuxX64: has("linux", "x64"), darwinArm64: has("darwin", "arm64") }).toEqual({ linuxX64: true, darwinArm64: true });
+  });
+
+  it("relative imports spell file names with the exact case (Linux file systems are case-sensitive)", () => {
+    // macOS finds main.ts for "./Main.js", a Linux runner does not; list each folder to compare exactly
+    const spelledExactly = (path: string): boolean => {
+      let dir = root;
+      for (const part of relative(root, path).split(sep)) {
+        if (!readdirSync(dir).includes(part)) return false;
+        dir = join(dir, part);
+      }
+      return true;
+    };
+    const sources = [
+      ...readdirSync(join(root, "src"), { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".ts")).map((f) => join(root, "src", f)),
+      ...readdirSync(join(root, "test")).filter((f) => f.endsWith(".ts")).map((f) => join(root, "test", f)),
+      join(root, "scripts", "demo.mjs"),
+    ];
+    const wrong: string[] = [];
+    for (const file of sources) {
+      for (const match of read(file).matchAll(/(?:from\s+|import\s*\(\s*)["'](\.{1,2}\/[^"']+)["']/g)) {
+        const target = resolve(dirname(file), match[1] ?? "");
+        // "./x.js" means x.ts in TypeScript sources; example code inside test strings points nowhere and is skipped
+        const found = [target, target.replace(/\.js$/, ".ts")].filter((candidate) => existsSync(candidate));
+        if (found.length > 0 && !found.some(spelledExactly)) wrong.push(`${relative(root, file)}: ${match[1]}`);
+      }
+    }
+    expect(sources.length).toBeGreaterThan(20);
+    expect(wrong).toEqual([]);
+  });
 });
