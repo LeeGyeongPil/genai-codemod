@@ -3,6 +3,21 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.1.3] - 2026-11-20
+
+### Added
+- `verify --timeout <seconds>` (default 60): an entry function that has not finished by then is stopped with a message naming the file and the function, exit code 2. Before, an entry that never resolved made `verify` wait forever.
+
+### Fixed
+- Pressing Ctrl+C (or sending SIGTERM) during `verify` now deletes the temporary `.genai-codemod-*.mjs` module next to your source before exiting with 130 (143 for SIGTERM).
+- Usage errors from the option parser no longer end with a double period.
+
+### Changed
+- CI runs on Linux and macOS with Node.js 22 and 24 (`fail-fast` off), so a failure shows whether it depends on the OS or the Node.js version.
+- Source comments are in English.
+
 ## [0.1.2] - 2026-11-19
 
 ### Fixed

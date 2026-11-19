@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.2
+node dist/cli.js --version   # 0.1.3
 ```
 
 아래 예시의 `genai-codemod` 는 `node dist/cli.js` 입니다. 이 이름을 PATH 에서 쓰려면 한 번 `npm link` 를 실행하세요.
@@ -108,6 +108,7 @@ rm -r old
 | `--entry <이름>` | `verify` 가 호출할 내보낸 함수(기본 `run`) | `--entry summarize` |
 | `--response ok\|blocked` | `verify` 에서 돌려줄 가짜 API 응답(기본 `ok`) | `--response blocked` |
 | `--vertex` | 진입 함수에 가짜 인증 클라이언트(`{ authClient }`) 전달 | `genai-codemod verify a.ts b.ts --vertex` |
+| `--timeout <초>` | 진입 함수가 그 시간 안에 끝나지 않으면 `verify` 를 멈춤(기본 60, 종료 코드 2) | `--timeout 120` |
 | `--json` | `verify` 결과를 JSON 으로 출력 | `--json` |
 | `--lang en\|ko`, `--no-color` | 출력 언어, 색 없이 출력 | `--lang ko` |
 
@@ -182,7 +183,7 @@ $ genai-codemod src --out-dir migrated
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -274,7 +275,7 @@ flowchart LR
 
 ## 한계와 로드맵
 
-0.1.2 의 알려진 한계:
+0.1.3 의 알려진 한계:
 - 공유 클라이언트는 같은 실행에서 검사한 파일 사이에서만 따라갑니다. 재export(`export { genAI } from "./client"`)와 네임스페이스 import(`import * as c`)는 따라가지 않습니다. 검사 경로 밖에서 import 하는 파일은 볼 수 없으므로 `client-shared` 경고로 알리고, 검사한 파일 중 import 하는 곳이 없으면 `client-exported` TODO 를 냅니다.
 - export 된 모델 핸들(`export const model = genAI.getGenerativeModel(...)`)은 옮기지 않습니다. 정의한 곳은 `handle-escapes`, import 한 곳은 `cross-module` 로 보고합니다. 클래스 필드에 저장한 클라이언트·채팅도 추적하지 않고 TODO 로 보고합니다.
 - `generateContent({ contents })`, `embedContent({ content, taskType })` 같은 요청 객체 형태는 `dynamic-model-params` 로 보고합니다.
@@ -282,7 +283,7 @@ flowchart LR
 - `verify` 는 로컬 import 를 각 파일 기준으로 해석하므로 옛 사본에는 트리 전체가 필요합니다([빠르게 시작하기](#빠르게-시작하기) 참고). `.json` 등 JS/TS 가 아닌 로컬 import 는 따로 처리하지 않습니다.
 - 진입 함수가 인증 클라이언트 인자를 받지 않는 Vertex 코드는 검증할 수 없습니다.
 - 목은 요청이 같다는 것을 보일 뿐, 서버가 그 모델이나 API 버전을 지원하는지는 보이지 않습니다. `verify` 는 내 진입 함수를 실제로 실행합니다.
-- 끝나지 않는 진입 함수에는 `verify` 시간 제한이 없고, 그때 Ctrl+C 를 누르면 임시 `.genai-codemod-*.mjs` 파일이 소스 옆에 남을 수 있습니다.
+- `verify` 는 60초 안에 끝나지 않는 진입 함수를 멈춥니다(`--timeout <초>` 로 변경). `verify` 도중 Ctrl+C 나 SIGTERM 을 보내면 임시 `.genai-codemod-*.mjs` 파일을 지우고 130(SIGTERM 은 143)으로 끝납니다.
 - 결과에 긴 한 줄 객체가 생길 수 있으니 Prettier 를 이어서 돌리세요.
 
 다음 계획: Vertex 함수 선언 스키마 변환(`function_declarations` 에서 `functionDeclarations`, `Type` enum), 캐시·파일 매니저 변환, 중첩 `generationConfig` 자동 평탄화, 인증 클라이언트 인자 없이도 Vertex 코드를 검증하는 토큰 엔드포인트 목. Python 판(`google-generativeai` 에서 `google-genai`)은 지금은 범위 밖입니다.
@@ -295,6 +296,7 @@ flowchart LR
 | 깨끗해 보이는데 종료 코드 1 | TODO 가 있거나 `verify` 가 차이를 찾음 | `TODO` 목록과 `Differences` 읽기 |
 | `경로를 찾을 수 없습니다`(종료 코드 2) | 경로 인자가 틀림 | 경로 확인 |
 | 진입 함수가 없다는 오류 | 진입 함수가 없거나 이름이 다름 | async 함수를 내보내거나 `--entry <이름>` 지정 |
+| `"run" 가 2초 안에 끝나지 않아 verify 를 멈췄습니다` (종료 코드 2) | 진입 함수가 목이 응답하지 않는 것(스트림·타이머·연결)을 기다림 | 함수가 값을 돌려주게 고치거나 `--timeout <초>` 로 시간을 늘림 |
 | Vertex `verify` 인증 실패 | 진입 함수가 `{ authClient }` 를 받지 않음 | 인증 클라이언트 인자를 받게 하고 `--vertex` 사용 |
 | 다시 실행하면 0개 변경인데도 종료 코드 `1` | 이미 변환됨(멱등)이지만 코드에 `genai-codemod TODO(text-throws-on-block)` 주석이 남아 있음 | 차단 응답 처리를 한 뒤 주석 삭제 |
 | `verify` 에서 `Could not load "@google/generative-ai"` | 옛 SDK 가 설치되어 있지 않음 | `npm install -D @google/generative-ai @google/genai` |
@@ -308,6 +310,8 @@ flowchart LR
 npm install
 npm test
 ```
+
+CI 는 Ubuntu 와 macOS 에서 Node.js 22·24 로 돕니다.
 
 버그·제안은 이슈로 남겨 주세요. 변경 기록은 [CHANGELOG.md](CHANGELOG.md).
 
