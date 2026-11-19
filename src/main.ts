@@ -17,6 +17,10 @@ import {
 } from "./transform/index.js";
 import { VerifyError } from "./verify/errors.js";
 import { verifyFiles } from "./verify/index.js";
+import { DEFAULT_TIMEOUT_SECONDS } from "./verify/run.js";
+
+// cli.ts deletes leftover temp modules when the user presses Ctrl+C during verify.
+export { removeTempModules } from "./verify/run.js";
 
 export interface Io {
   stdout: (text: string) => void;
@@ -35,6 +39,7 @@ const OPTIONS = {
   "no-color": { type: "boolean" },
   entry: { type: "string" },
   response: { type: "string" },
+  timeout: { type: "string" },
   vertex: { type: "boolean" },
   json: { type: "boolean" },
   help: { type: "boolean", short: "h" },
@@ -79,7 +84,8 @@ export async function main(argv: string[], io: Io): Promise<number> {
   try {
     parsed = parse(argv);
   } catch (error) {
-    const first = (error as Error).message.split("\n")[0] ?? "invalid arguments";
+    // Node's parseArgs messages end with "."; the template adds its own, so drop it (no "..")
+    const first = ((error as Error).message.split("\n")[0] ?? "invalid arguments").replace(/\.+$/, "");
     const unknown = first.match(/Unknown option '([^']+)'/);
     if ((error as NodeJS.ErrnoException).code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && unknown) {
       return fail("err.unknownOption", { option: unknown[1] ?? "" });
@@ -113,11 +119,14 @@ async function runVerify(files: string[], values: Values, io: Io, lang: Lang, fa
   if (!before || !after || files.length !== 2) return fail("err.verifyArgs");
   const response = values.response ?? "ok";
   if (response !== "ok" && response !== "blocked") return fail("err.badResponse", { value: response });
+  // seconds each entry function may run before verify stops it (it never waits forever)
+  const timeout = values.timeout === undefined ? DEFAULT_TIMEOUT_SECONDS : Number(values.timeout);
+  if (!Number.isFinite(timeout) || timeout <= 0) return fail("err.badTimeout", { value: values.timeout ?? "" });
   try {
     const result = await verifyFiles(
       resolve(io.cwd, before),
       resolve(io.cwd, after),
-      { entry: values.entry ?? "run", response, vertex: values.vertex === true },
+      { entry: values.entry ?? "run", response, vertex: values.vertex === true, timeoutSeconds: timeout },
       lang,
     );
     // Show the paths the user typed, not the absolute ones.

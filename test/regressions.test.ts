@@ -1,8 +1,8 @@
-import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { byName, collectFiles } from "../src/project.js";
+import { byName, collectFiles, VERIFY_TEMP_PREFIX } from "../src/project.js";
 import { transformSource } from "../src/transform/index.js";
 import { verifyFiles } from "../src/verify/index.js";
 import { CHILD, fixture, read, root, runCli, scratch } from "./helpers.js";
@@ -298,4 +298,72 @@ describe("same results on every machine", () => {
     expect(cli.stdout).toContain("Result: MATCH");
     expect(Date.now() - started).toBeLessThan(30_000);
   });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Round 7 (QA Q-2): an entry function that never settles must not make verify wait forever, and
+// stopping verify (Ctrl+C) must not leave the temp module next to the user's source.
+
+describe("verify never waits forever", () => {
+  const HANG = "export async function run() {\n  await new Promise(() => {\n    setInterval(() => undefined, 1000);\n  });\n}\n";
+  const leftovers = (dir: string) => readdirSync(dir).filter((f) => f.startsWith(VERIFY_TEMP_PREFIX));
+
+  it("--timeout stops a never-settling entry with a message, exit 2 and no temp module left", () => {
+    const dir = project("hang-timeout", { "old.ts": HANG, "new.ts": HANG });
+    const started = Date.now();
+    const en = builtCli(["verify", "old.ts", "new.ts", "--timeout", "1"], dir);
+    expect(en.error).toBeUndefined(); // ended by itself, not by the CHILD limit
+    expect(en.status).toBe(2);
+    expect(en.stderr).toContain('old.ts: "run" did not finish within 1 s');
+    expect(en.stderr).toContain("--timeout <seconds>");
+    expect(Date.now() - started).toBeLessThan(30_000);
+    expect(leftovers(dir)).toEqual([]);
+
+    const ko = spawnSync(process.execPath, [join(root, "dist", "cli.js"), "--lang", "ko", "verify", "old.ts", "new.ts", "--timeout", "0.5"], {
+      ...CHILD,
+      cwd: dir,
+    });
+    expect(ko.status).toBe(2);
+    expect(ko.stderr).toContain('old.ts: "run" 가 0.5초 안에 끝나지 않아');
+  });
+
+  it("rejects a --timeout that is not a positive number", async () => {
+    for (const value of ["0", "-3", "soon"]) {
+      const res = await runCli(["verify", "a.ts", "b.ts", `--timeout=${value}`]);
+      expect(res.code).toBe(2);
+      expect(res.stderr).toContain(`Invalid --timeout value "${value}"`);
+    }
+    // "--timeout -3" looks like an option to parseArgs: a usage error, with one period, not ".."
+    const ambiguous = await runCli(["verify", "a.ts", "b.ts", "--timeout", "-3"]);
+    expect(ambiguous.code).toBe(2);
+    // (Node's own wording may change between versions, so only the frame is checked)
+    expect(ambiguous.stderr).toMatch(/^Usage error: .*--timeout.*[^.]\. Run genai-codemod --help\.\n$/);
+  });
+
+  it("the in-process API rejects with err.entryTimeout", async () => {
+    const dir = project("hang-api", { "old.ts": HANG });
+    const file = join(dir, "old.ts");
+    await expect(verifyFiles(file, file, { ...ok, timeoutSeconds: 0.3 }, "en")).rejects.toMatchObject({ key: "err.entryTimeout" });
+    expect(leftovers(dir)).toEqual([]);
+  });
+
+  it("Ctrl+C during verify removes the temp module and exits 130", async () => {
+    const dir = project("hang-sigint", { "old.ts": HANG, "new.ts": HANG });
+    const child = spawn(process.execPath, [join(root, "dist", "cli.js"), "--lang", "en", "verify", "old.ts", "new.ts"], {
+      cwd: dir,
+      stdio: "ignore",
+    });
+    const exited = new Promise<number | null>((done) => child.on("exit", (code) => done(code)));
+    try {
+      // wait until verify is inside the entry function (its temp module exists)
+      const deadline = Date.now() + 30_000;
+      while (leftovers(dir).length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+      expect(leftovers(dir)).toHaveLength(1);
+      child.kill("SIGINT");
+      expect(await exited).toBe(130);
+      expect(leftovers(dir)).toEqual([]);
+    } finally {
+      child.kill("SIGKILL"); // no-op when it already ended
+    }
+  }, 60_000);
 });

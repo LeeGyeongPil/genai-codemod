@@ -1,23 +1,31 @@
-# 키·모델 없이 mock 모드로 전체 흐름을 검증한다(Node.js·TypeScript·React).
+# Checks the whole flow in mock mode, with no API key and no model (Node.js + TypeScript).
 name: ci
 on:
   push:
   pull_request:
   schedule:
-    - cron: "17 3 * * 1"   # 매주 월요일 — 의존성·런타임이 바뀌어 깨지지 않았는지 정기 확인
+    - cron: "17 3 * * 1"   # every Monday: catch breakage from new dependency or runtime releases
   workflow_dispatch:
 jobs:
   test:
-    runs-on: ubuntu-latest
-    # 전체가 2~3분이면 끝난다. 멈춘 자식 프로세스가 있으면 6시간 대신 15분 안에 실패로 끝낸다
+    name: test (${{ matrix.os }}, Node ${{ matrix.node }})
+    # Linux and macOS, oldest supported (22, see engines) and current LTS Node. fail-fast is off so a
+    # failure shows whether it depends on the OS, on the Node version, or on neither (runner setup).
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: ["22", "24"]
+    runs-on: ${{ matrix.os }}
+    # The suite takes 2-3 minutes; a stuck child process fails the job in 15 minutes instead of 6 hours
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: "24"
+          node-version: ${{ matrix.node }}
           cache: npm
-      - run: node --version && npm --version   # 실패 로그를 읽을 때 런타임 버전을 바로 확인
+      - run: node --version && npm --version   # runtime versions at the top of a failure log
       - run: npm ci
       - run: npm test
         env:

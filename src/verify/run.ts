@@ -15,6 +15,34 @@ export interface RunOptions {
   entry: string;
   response: MockResponseKind;
   vertex: boolean;
+  /** Seconds the module import plus the entry call may take (default DEFAULT_TIMEOUT_SECONDS). */
+  timeoutSeconds?: number;
+}
+
+export const DEFAULT_TIMEOUT_SECONDS = 60;
+
+/** Temp modules that exist right now; removeTempModules() deletes them when the CLI is interrupted. */
+const liveTempModules = new Set<string>();
+
+export function removeTempModules(): void {
+  for (const temp of liveTempModules) rmSync(temp, { force: true });
+  liveTempModules.clear();
+}
+
+/**
+ * Settle with `work`, or reject with err.entryTimeout after `seconds`. The timer is cleared as soon as
+ * `work` settles; while it runs it keeps Node alive, so a never-settling entry still ends with a message.
+ */
+async function withTimeout<T>(work: Promise<T>, seconds: number, vars: { file: string; entry: string }): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new VerifyError("err.entryTimeout", { ...vars, seconds })), seconds * 1000);
+  });
+  try {
+    return await Promise.race([work, deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /** Where the hooks module lives: next to this file when built, in dist/ when run from sources (tests). */
@@ -96,6 +124,7 @@ export async function runWithMock(file: string, options: RunOptions, siblingsFro
   const requests: CapturedRequest[] = [];
   const realFetch = globalThis.fetch;
   try {
+    liveTempModules.add(temp);
     writeFileSync(temp, toModuleSource(abs, source));
     globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
       const captured = await record(input, init);
@@ -103,29 +132,35 @@ export async function runWithMock(file: string, options: RunOptions, siblingsFro
       return cannedResponse(options.response, captured.path);
     }) as typeof fetch;
 
-    let mod: Record<string, unknown>;
-    try {
-      mod = (await import(pathToFileURL(temp).href)) as Record<string, unknown>;
-    } catch (error) {
-      const match = /Cannot find (?:package|module) '([^']+)'/.exec((error as Error).message);
-      if (match && /^@google/.test(match[1] ?? "")) throw new VerifyError("err.sdkMissing", { pkg: match[1] ?? "", file });
-      const local = localImportMissing((error as Error).message, temp, file);
-      if (local) throw new VerifyError("err.localImportMissing", local);
-      throw new VerifyError("err.verifyRun", { file, detail: (error as Error).message });
-    }
-    const entry = mod[options.entry];
-    if (typeof entry !== "function") throw new VerifyError("err.entryMissing", { file, entry: options.entry });
+    // Import and call the entry function. Both run the user's code, so both count toward the time limit.
+    const importAndCall = async (): Promise<unknown> => {
+      let mod: Record<string, unknown>;
+      try {
+        mod = (await import(pathToFileURL(temp).href)) as Record<string, unknown>;
+      } catch (error) {
+        const match = /Cannot find (?:package|module) '([^']+)'/.exec((error as Error).message);
+        if (match && /^@google/.test(match[1] ?? "")) throw new VerifyError("err.sdkMissing", { pkg: match[1] ?? "", file });
+        const local = localImportMissing((error as Error).message, temp, file);
+        if (local) throw new VerifyError("err.localImportMissing", local);
+        throw new VerifyError("err.verifyRun", { file, detail: (error as Error).message });
+      }
+      const entry = mod[options.entry];
+      if (typeof entry !== "function") throw new VerifyError("err.entryMissing", { file, entry: options.entry });
 
-    const authClient = options.vertex ? createFakeAuthClient(abs, source) : undefined;
-    try {
-      const value: unknown = await (entry as (arg: unknown) => unknown)(options.vertex ? { authClient } : undefined);
-      return { requests, value };
-    } catch (error) {
-      throw new VerifyError("err.verifyRun", { file, detail: (error as Error).message });
-    }
+      const authClient = options.vertex ? createFakeAuthClient(abs, source) : undefined;
+      try {
+        return await (entry as (arg: unknown) => unknown)(options.vertex ? { authClient } : undefined);
+      } catch (error) {
+        throw new VerifyError("err.verifyRun", { file, detail: (error as Error).message });
+      }
+    };
+    const seconds = options.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS;
+    const value = await withTimeout(importAndCall(), seconds, { file, entry: options.entry });
+    return { requests, value };
   } finally {
     globalThis.fetch = realFetch;
     unregister();
     rmSync(temp, { force: true });
+    liveTempModules.delete(temp);
   }
 }

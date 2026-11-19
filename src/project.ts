@@ -3,7 +3,7 @@ import { dirname, join, relative, resolve } from "node:path";
 
 const EXTENSIONS = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const SKIPPED_DIRS = new Set(["node_modules", "dist", "build"]);
-/** verify 가 원본 옆에 잠깐 만드는 임시 모듈 이름 앞부분. 스캔 대상에서 늘 뺀다. */
+/** Name prefix of the temporary module verify writes next to the original for a moment. Scans always skip it. */
 export const VERIFY_TEMP_PREFIX = ".genai-codemod-";
 
 export class PathError extends Error {
@@ -27,21 +27,21 @@ function isSource(name: string): boolean {
 }
 
 /**
- * 이름을 코드 포인트 순서로 비교한다. localeCompare 는 실행 환경의 로캘(LANG, ICU)에 따라 순서가
- * 달라져 같은 폴더라도 macOS·Linux·CI 에서 diff·보고서 순서가 달라질 수 있다.
+ * Compare names by code point. localeCompare depends on the runtime locale (LANG, ICU), so the same
+ * folder could give a different diff and report order on macOS, Linux and CI.
  */
 export function byName(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function walk(dir: string, root: string, out: SourceEntry[], cwd: string): void {
-  // readdir 순서는 파일 시스템마다 다르다(ext4 는 해시 순) — 항상 정렬해서 결과를 고정한다
+  // readdir order differs between file systems (ext4 uses hash order); always sort for a stable result
   for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))) {
     if (entry.isDirectory()) {
       if (SKIPPED_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
       walk(join(dir, entry.name), root, out, cwd);
     } else if (entry.isFile() && isSource(entry.name) && !entry.name.startsWith(VERIFY_TEMP_PREFIX)) {
-      // 같은 폴더에서 verify 가 도는 중이면 임시 .mjs 가 보일 수 있다 — 사용자 코드가 아니므로 건너뛴다
+      // a verify running in the same folder may leave a short-lived temp .mjs here; it is not user code
       const abs = join(dir, entry.name);
       out.push({ abs, display: relative(cwd, abs) || abs, relative: relative(root, abs) });
     }

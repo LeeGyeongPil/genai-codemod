@@ -19,6 +19,7 @@ Verify options:
   --entry <name>           Exported function to call in both files (default: run)
   --response <ok|blocked>  Canned API response served by the fetch mock (default: ok)
   --vertex                 Pass a fake auth client ({ authClient }) to the entry function
+  --timeout <seconds>      Stop an entry function that has not finished by then (default: 60)
   --json                   Print the result as JSON
 
 Other:
@@ -34,6 +35,8 @@ verify runs YOUR code (the entry function) with a fake fetch; use it on code you
   "err.badApiVersion": "Invalid --api-version value \"{value}\". Use keep or sdk-default.",
   "err.badLang": "Invalid --lang value \"{value}\". Use en or ko.",
   "err.badResponse": "Invalid --response value \"{value}\". Use ok or blocked.",
+  "err.badTimeout": "Invalid --timeout value \"{value}\". Use a number of seconds greater than 0, e.g. --timeout 120.",
+  "err.entryTimeout": "{file}: \"{entry}\" did not finish within {seconds} s, so verify stopped. It probably waits for something that never ends (a stream, timer or connection the mock does not answer). Make the function return, or allow more time with --timeout <seconds>.",
   "err.writeAndOut": "--write and --out-dir cannot be used together. Pick one.",
   "err.nodeVersion": "genai-codemod needs Node.js 22 or newer (found {found}). Upgrade Node.js and run it again.",
   "err.unknownOption": "Unknown option {option}. Run genai-codemod --help.",

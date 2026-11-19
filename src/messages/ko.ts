@@ -21,6 +21,7 @@ verify 옵션:
   --entry <이름>           두 파일에서 호출할 내보낸 함수 (기본: run)
   --response <ok|blocked>  fetch 목이 돌려줄 가짜 응답 (기본: ok)
   --vertex                 진입 함수에 가짜 인증 클라이언트({ authClient }) 전달
+  --timeout <초>           진입 함수가 이 시간 안에 끝나지 않으면 멈춤 (기본: 60)
   --json                   결과를 JSON 으로 출력
 
 기타:
@@ -35,6 +36,8 @@ verify 는 사용자의 코드(진입 함수)를 가짜 fetch 아래에서 실�
   "err.badApiVersion": "--api-version 값 \"{value}\" 이 올바르지 않습니다. keep 또는 sdk-default 를 쓰세요.",
   "err.badLang": "--lang 값 \"{value}\" 이 올바르지 않습니다. en 또는 ko 를 쓰세요.",
   "err.badResponse": "--response 값 \"{value}\" 이 올바르지 않습니다. ok 또는 blocked 를 쓰세요.",
+  "err.badTimeout": "--timeout 값 \"{value}\" 이 올바르지 않습니다. 0 보다 큰 초 단위 숫자를 쓰세요. 예: --timeout 120.",
+  "err.entryTimeout": "{file}: \"{entry}\" 가 {seconds}초 안에 끝나지 않아 verify 를 멈췄습니다. 끝나지 않는 무언가(목이 응답하지 않는 스트림·타이머·연결)를 기다리는 것으로 보입니다. 함수가 값을 돌려주게 고치거나 --timeout <초> 로 시간을 늘리세요.",
   "err.writeAndOut": "--write 와 --out-dir 는 함께 쓸 수 없습니다. 하나만 고르세요.",
   "err.nodeVersion": "genai-codemod 는 Node.js 22 이상이 필요합니다(현재 {found}). Node.js 를 올린 뒤 다시 실행하세요.",
   "err.unknownOption": "알 수 없는 옵션 {option}. genai-codemod --help 를 확인하세요.",
