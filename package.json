@@ -1,6 +1,6 @@
 {
   "name": "genai-codemod",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Codemod CLI that migrates @google/generative-ai and @google-cloud/vertexai code to @google/genai and verifies the migrated code sends the same API requests.",
   "type": "module",
   "license": "MIT",

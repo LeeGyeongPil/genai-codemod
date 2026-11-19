@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.1
+node dist/cli.js --version   # 0.1.2
 ```
 
 Examples below write `genai-codemod` for `node dist/cli.js`. Run `npm link` once if you want that name on your PATH.
@@ -182,7 +182,7 @@ Warnings have codes too: `api-version-pinned`, `api-version-default-changed`, `v
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -274,7 +274,7 @@ flowchart LR
 
 ## Limitations and roadmap
 
-Known limits in 0.1.1:
+Known limits in 0.1.2:
 - Shared clients are followed only between files scanned in the same run. Re-exports (`export { genAI } from "./client"`) and namespace imports (`import * as c`) are not followed. Importers outside the scanned paths cannot be seen: the `client-shared` warning reminds you, and a `client-exported` TODO appears when no scanned file imports the client.
 - Exported model handles (`export const model = genAI.getGenerativeModel(...)`) are not moved: `handle-escapes` where defined, `cross-module` where imported. Clients or chats stored in class fields are reported as TODOs, not tracked.
 - Request-object calls such as `generateContent({ contents })` and `embedContent({ content, taskType })` are reported as `dynamic-model-params`.
@@ -282,6 +282,7 @@ Known limits in 0.1.1:
 - `verify` resolves local imports relative to each file; an old copy needs its whole tree (see [Quick start](#quick-start)). Local imports of `.json` or other non-JS/TS files get no special handling.
 - Vertex code whose entry function does not accept an auth client argument cannot be verified.
 - The mock proves the requests are equal, not that the server supports the model or API version. `verify` executes your entry function.
+- An entry function whose promise never settles has no `verify` time limit, and Ctrl+C then can leave a temporary `.genai-codemod-*.mjs` file next to your source.
 - Output can contain long one-line objects; run Prettier afterwards.
 
 Planned next: Vertex function declaration schemas (`function_declarations` to `functionDeclarations`, the `Type` enum), cache and file manager rewrites, an automatic fix for nested `generationConfig`, and a token-endpoint mock so Vertex code can be verified without an auth client argument. A Python version (`google-generativeai` to `google-genai`) is out of scope for now.

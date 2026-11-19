@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.2] - 2026-11-19
+
+### Fixed
+- The CLI now exits as soon as its output is written. Before, `verify` could hang when the checked entry function left a timer or socket open, because the user's code kept Node.js running.
+- Folder scans are sorted by code point instead of `localeCompare`, so the order of diffs and report entries no longer depends on the machine's locale.
+- `npm start` stops a demo step that does not finish within 120 seconds and says which command hung.
+
+### Changed
+- CI: a 15-minute job limit and a step that prints the Node.js and npm versions; test child processes have a 45-second limit so a hang fails with a message instead of stalling the job.
+
 ## [0.1.1] - 2026-11-19
 
 ### Fixed

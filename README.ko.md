@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.1
+node dist/cli.js --version   # 0.1.2
 ```
 
 아래 예시의 `genai-codemod` 는 `node dist/cli.js` 입니다. 이 이름을 PATH 에서 쓰려면 한 번 `npm link` 를 실행하세요.
@@ -182,7 +182,7 @@ $ genai-codemod src --out-dir migrated
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -274,7 +274,7 @@ flowchart LR
 
 ## 한계와 로드맵
 
-0.1.1 의 알려진 한계:
+0.1.2 의 알려진 한계:
 - 공유 클라이언트는 같은 실행에서 검사한 파일 사이에서만 따라갑니다. 재export(`export { genAI } from "./client"`)와 네임스페이스 import(`import * as c`)는 따라가지 않습니다. 검사 경로 밖에서 import 하는 파일은 볼 수 없으므로 `client-shared` 경고로 알리고, 검사한 파일 중 import 하는 곳이 없으면 `client-exported` TODO 를 냅니다.
 - export 된 모델 핸들(`export const model = genAI.getGenerativeModel(...)`)은 옮기지 않습니다. 정의한 곳은 `handle-escapes`, import 한 곳은 `cross-module` 로 보고합니다. 클래스 필드에 저장한 클라이언트·채팅도 추적하지 않고 TODO 로 보고합니다.
 - `generateContent({ contents })`, `embedContent({ content, taskType })` 같은 요청 객체 형태는 `dynamic-model-params` 로 보고합니다.
@@ -282,6 +282,7 @@ flowchart LR
 - `verify` 는 로컬 import 를 각 파일 기준으로 해석하므로 옛 사본에는 트리 전체가 필요합니다([빠르게 시작하기](#빠르게-시작하기) 참고). `.json` 등 JS/TS 가 아닌 로컬 import 는 따로 처리하지 않습니다.
 - 진입 함수가 인증 클라이언트 인자를 받지 않는 Vertex 코드는 검증할 수 없습니다.
 - 목은 요청이 같다는 것을 보일 뿐, 서버가 그 모델이나 API 버전을 지원하는지는 보이지 않습니다. `verify` 는 내 진입 함수를 실제로 실행합니다.
+- 끝나지 않는 진입 함수에는 `verify` 시간 제한이 없고, 그때 Ctrl+C 를 누르면 임시 `.genai-codemod-*.mjs` 파일이 소스 옆에 남을 수 있습니다.
 - 결과에 긴 한 줄 객체가 생길 수 있으니 Prettier 를 이어서 돌리세요.
 
 다음 계획: Vertex 함수 선언 스키마 변환(`function_declarations` 에서 `functionDeclarations`, `Type` enum), 캐시·파일 매니저 변환, 중첩 `generationConfig` 자동 평탄화, 인증 클라이언트 인자 없이도 Vertex 코드를 검증하는 토큰 엔드포인트 목. Python 판(`google-generativeai` 에서 `google-genai`)은 지금은 범위 밖입니다.
