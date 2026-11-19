@@ -1,0 +1,11 @@
+{
+  "name": "legacy-app",
+  "private": true,
+  "description": "Sample app that still uses the end-of-life Google SDKs; genai-codemod migrates it.",
+  "type": "module",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@google/generative-ai": "0.24.1",
+    "@google-cloud/vertexai": "1.12.0"
+  }
+}

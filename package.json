@@ -1,0 +1,46 @@
+{
+  "name": "genai-codemod",
+  "version": "0.1.0",
+  "description": "Codemod CLI that migrates @google/generative-ai and @google-cloud/vertexai code to @google/genai and verifies the migrated code sends the same API requests.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "genai-codemod": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "README.ko.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "codemod",
+    "gemini",
+    "google-genai",
+    "vertexai",
+    "migration",
+    "ts-morph"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "pretest": "npm run build",
+    "test": "vitest run",
+    "start": "npm run build && node scripts/demo.mjs",
+    "demo:hidden": "npm run build && node scripts/demo.mjs --hidden"
+  },
+  "dependencies": {
+    "ts-morph": "28.0.0"
+  },
+  "devDependencies": {
+    "@google-cloud/vertexai": "1.12.0",
+    "@google/genai": "3.6.1",
+    "@google/generative-ai": "0.24.1",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2",
+    "vitest": "5.1.1"
+  }
+}
