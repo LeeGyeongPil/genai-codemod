@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.3
+node dist/cli.js --version   # 0.1.4
 ```
 
 Examples below write `genai-codemod` for `node dist/cli.js`. Run `npm link` once if you want that name on your PATH.
@@ -108,7 +108,7 @@ Rerunning after `--write` reports `0 files changed` (the codemod is idempotent),
 | `--entry <name>` | Exported function that `verify` calls (default `run`) | `--entry summarize` |
 | `--response ok\|blocked` | Canned API answer for `verify` (default `ok`) | `--response blocked` |
 | `--vertex` | Give the entry function a fake auth client (`{ authClient }`) | `genai-codemod verify a.ts b.ts --vertex` |
-| `--timeout <seconds>` | Stop `verify` if the entry function has not finished by then (default 60, exit 2) | `--timeout 120` |
+| `--timeout <seconds>` | Stop `verify` if the entry function has not finished by then (default 60, max 2147483, exit 2) | `--timeout 120` |
 | `--json` | `verify` result as JSON | `--json` |
 | `--lang en\|ko`, `--no-color` | Output language, plain output | `--lang ko` |
 
@@ -155,7 +155,7 @@ Summary: 2 files scanned, 2 files changed (written to migrated), 0 TODOs, 2 warn
 
 `migrated/service.ts` now calls `genAI.models.generateContent({ model: "gemini-2.5-flash", contents: "hello" })` and returns `r.text`, and `genai-codemod verify src/service.ts migrated/service.ts` prints `MATCH`. The `client-shared` warning on `src/client.ts:3` reminds you that importers outside the scanned paths need the same change.
 
-If you scan only one side, nothing is half-migrated in silence. `genai-codemod src/service.ts` reports `cross-module` at `src/service.ts:4` and `genai-codemod src/client.ts` reports `client-exported` at `src/client.ts:3`; both exit `1`.
+If you scan only one side, nothing is half-migrated in silence. `genai-codemod src/service.ts` reports `cross-module` at `src/service.ts:2` and `genai-codemod src/client.ts` reports `client-exported` at `src/client.ts:3`; both exit `1`.
 
 ### What each TODO means
 
@@ -183,7 +183,7 @@ Warnings have codes too: `api-version-pinned`, `api-version-default-changed`, `v
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -275,7 +275,7 @@ flowchart LR
 
 ## Limitations and roadmap
 
-Known limits in 0.1.3:
+Known limits in 0.1.4:
 - Shared clients are followed only between files scanned in the same run. Re-exports (`export { genAI } from "./client"`) and namespace imports (`import * as c`) are not followed. Importers outside the scanned paths cannot be seen: the `client-shared` warning reminds you, and a `client-exported` TODO appears when no scanned file imports the client.
 - Exported model handles (`export const model = genAI.getGenerativeModel(...)`) are not moved: `handle-escapes` where defined, `cross-module` where imported. Clients or chats stored in class fields are reported as TODOs, not tracked.
 - Request-object calls such as `generateContent({ contents })` and `embedContent({ content, taskType })` are reported as `dynamic-model-params`.
@@ -311,7 +311,7 @@ npm install
 npm test
 ```
 
-CI runs on Ubuntu and macOS with Node.js 22 and 24.
+CI runs on Linux with Node.js 22 and 24 on every push, and on macOS as well once the repository is public.
 
 Report bugs and ideas as issues. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 

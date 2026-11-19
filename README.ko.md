@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.3
+node dist/cli.js --version   # 0.1.4
 ```
 
 아래 예시의 `genai-codemod` 는 `node dist/cli.js` 입니다. 이 이름을 PATH 에서 쓰려면 한 번 `npm link` 를 실행하세요.
@@ -108,7 +108,7 @@ rm -r old
 | `--entry <이름>` | `verify` 가 호출할 내보낸 함수(기본 `run`) | `--entry summarize` |
 | `--response ok\|blocked` | `verify` 에서 돌려줄 가짜 API 응답(기본 `ok`) | `--response blocked` |
 | `--vertex` | 진입 함수에 가짜 인증 클라이언트(`{ authClient }`) 전달 | `genai-codemod verify a.ts b.ts --vertex` |
-| `--timeout <초>` | 진입 함수가 그 시간 안에 끝나지 않으면 `verify` 를 멈춤(기본 60, 종료 코드 2) | `--timeout 120` |
+| `--timeout <초>` | 진입 함수가 그 시간 안에 끝나지 않으면 `verify` 를 멈춤(기본 60, 최대 2147483, 종료 코드 2) | `--timeout 120` |
 | `--json` | `verify` 결과를 JSON 으로 출력 | `--json` |
 | `--lang en\|ko`, `--no-color` | 출력 언어, 색 없이 출력 | `--lang ko` |
 
@@ -155,7 +155,7 @@ $ genai-codemod src --out-dir migrated
 
 `migrated/service.ts` 는 `genAI.models.generateContent({ model: "gemini-2.5-flash", contents: "hello" })` 를 부르고 `r.text` 를 돌려주며, `genai-codemod verify src/service.ts migrated/service.ts` 는 `MATCH` 를 출력합니다. `src/client.ts:3` 의 `client-shared` 경고는 검사 경로 밖에서 import 하는 파일도 같은 이전이 필요하다고 알려 줍니다.
 
-한쪽만 검사해도 조용히 반만 바뀌지 않습니다. `genai-codemod src/service.ts` 는 `src/service.ts:4` 에 `cross-module` 을, `genai-codemod src/client.ts` 는 `src/client.ts:3` 에 `client-exported` 를 보고하고 둘 다 종료 코드 `1` 입니다.
+한쪽만 검사해도 조용히 반만 바뀌지 않습니다. `genai-codemod src/service.ts` 는 `src/service.ts:2` 에 `cross-module` 을, `genai-codemod src/client.ts` 는 `src/client.ts:3` 에 `client-exported` 를 보고하고 둘 다 종료 코드 `1` 입니다.
 
 ### TODO 코드별 뜻
 
@@ -183,7 +183,7 @@ $ genai-codemod src --out-dir migrated
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -275,7 +275,7 @@ flowchart LR
 
 ## 한계와 로드맵
 
-0.1.3 의 알려진 한계:
+0.1.4 의 알려진 한계:
 - 공유 클라이언트는 같은 실행에서 검사한 파일 사이에서만 따라갑니다. 재export(`export { genAI } from "./client"`)와 네임스페이스 import(`import * as c`)는 따라가지 않습니다. 검사 경로 밖에서 import 하는 파일은 볼 수 없으므로 `client-shared` 경고로 알리고, 검사한 파일 중 import 하는 곳이 없으면 `client-exported` TODO 를 냅니다.
 - export 된 모델 핸들(`export const model = genAI.getGenerativeModel(...)`)은 옮기지 않습니다. 정의한 곳은 `handle-escapes`, import 한 곳은 `cross-module` 로 보고합니다. 클래스 필드에 저장한 클라이언트·채팅도 추적하지 않고 TODO 로 보고합니다.
 - `generateContent({ contents })`, `embedContent({ content, taskType })` 같은 요청 객체 형태는 `dynamic-model-params` 로 보고합니다.
@@ -296,7 +296,7 @@ flowchart LR
 | 깨끗해 보이는데 종료 코드 1 | TODO 가 있거나 `verify` 가 차이를 찾음 | `TODO` 목록과 `Differences` 읽기 |
 | `경로를 찾을 수 없습니다`(종료 코드 2) | 경로 인자가 틀림 | 경로 확인 |
 | 진입 함수가 없다는 오류 | 진입 함수가 없거나 이름이 다름 | async 함수를 내보내거나 `--entry <이름>` 지정 |
-| `"run" 가 2초 안에 끝나지 않아 verify 를 멈췄습니다` (종료 코드 2) | 진입 함수가 목이 응답하지 않는 것(스트림·타이머·연결)을 기다림 | 함수가 값을 돌려주게 고치거나 `--timeout <초>` 로 시간을 늘림 |
+| `"run" 함수가 2초 안에 끝나지 않아 verify 를 멈췄습니다` (종료 코드 2) | 진입 함수가 목이 응답하지 않는 것(스트림·타이머·연결)을 기다림 | 함수가 값을 돌려주게 고치거나 `--timeout <초>` 로 시간을 늘림 |
 | Vertex `verify` 인증 실패 | 진입 함수가 `{ authClient }` 를 받지 않음 | 인증 클라이언트 인자를 받게 하고 `--vertex` 사용 |
 | 다시 실행하면 0개 변경인데도 종료 코드 `1` | 이미 변환됨(멱등)이지만 코드에 `genai-codemod TODO(text-throws-on-block)` 주석이 남아 있음 | 차단 응답 처리를 한 뒤 주석 삭제 |
 | `verify` 에서 `Could not load "@google/generative-ai"` | 옛 SDK 가 설치되어 있지 않음 | `npm install -D @google/generative-ai @google/genai` |
@@ -311,7 +311,7 @@ npm install
 npm test
 ```
 
-CI 는 Ubuntu 와 macOS 에서 Node.js 22·24 로 돕니다.
+CI 는 푸시마다 Linux 에서 Node.js 22·24 로 돌고, 저장소가 공개되면 macOS 도 함께 돕니다.
 
 버그·제안은 이슈로 남겨 주세요. 변경 기록은 [CHANGELOG.md](CHANGELOG.md).
 

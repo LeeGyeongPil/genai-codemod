@@ -5,6 +5,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-20
+
+### Fixed
+- `verify --timeout` refuses values above 2147483 seconds (about 24.8 days). Node's timers cannot hold more, so such a value used to fire after 1 ms and stop a normal entry function at once with a misleading message. The library API caps the value instead.
+- Korean messages no longer attach a particle to a quoted value whose last sound does not match it (for example the `--api-version`, `--lang`, `--response` and `--timeout` errors, the timeout message, and the `client-exported` / `client-shared` texts).
+
+### Changed
+- CI runs macOS jobs only when the repository is public; Linux with Node.js 22 and 24 runs on every push. A private repository pays about ten times more for macOS runner minutes.
+- CI checks right after `npm ci` that the platform's native TypeScript compiler is installed, and the tests guard that `package-lock.json` keeps the native packages for Linux and macOS and that relative imports match file names with the exact case (Linux file systems are case-sensitive).
+- A test covers SIGTERM during `verify` as well as Ctrl+C.
+
 ## [0.1.3] - 2026-11-20
 
 ### Added
