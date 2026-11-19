@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-20
+
+### Fixed
+- README: the "Shared clients across files" console example now shows the full output including the `Warnings:` block.
+
 ## [0.1.4] - 2026-11-20
 
 ### Fixed

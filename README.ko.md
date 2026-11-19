@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.4
+node dist/cli.js --version   # 0.1.5
 ```
 
 아래 예시의 `genai-codemod` 는 `node dist/cli.js` 입니다. 이 이름을 PATH 에서 쓰려면 한 번 `npm link` 를 실행하세요.
@@ -151,6 +151,12 @@ $ genai-codemod src --out-dir migrated
 저장: migrated/service.ts
 
 요약: 파일 2개 검사, 2개 변경 (migrated 에 저장함), TODO 0개, 경고 2개
+
+경고:
+  src/client.ts:3 client-shared - 이 클라이언트는 "genAI" 이름으로 export 됩니다. 이것을 import 하는 검사 대상 파일 1개는 같은 실행에서 함께 처리했습니다(변환하거나 TODO 로 보고). 검사 경로 밖에서 import 하는 파일도 같은 이전이 필요합니다.
+  src/client.ts:3 api-version-pinned - 구 SDK 가 쓰던 엔드포인트 버전을 보존하려고 apiVersion "v1beta" 을 고정했습니다. @google/genai 3.x 의 기본값은 v1(Vertex: v1beta1)입니다. 기본값을 시험한 뒤 고정을 빼거나 GOOGLE_GENAI_API_VERSION 을 쓰세요.
+
+결과 확인: genai-codemod verify <전> <후>
 ```
 
 `migrated/service.ts` 는 `genAI.models.generateContent({ model: "gemini-2.5-flash", contents: "hello" })` 를 부르고 `r.text` 를 돌려주며, `genai-codemod verify src/service.ts migrated/service.ts` 는 `MATCH` 를 출력합니다. `src/client.ts:3` 의 `client-shared` 경고는 검사 경로 밖에서 import 하는 파일도 같은 이전이 필요하다고 알려 줍니다.
@@ -183,7 +189,7 @@ $ genai-codemod src --out-dir migrated
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -275,7 +281,7 @@ flowchart LR
 
 ## 한계와 로드맵
 
-0.1.4 의 알려진 한계:
+0.1.5 의 알려진 한계:
 - 공유 클라이언트는 같은 실행에서 검사한 파일 사이에서만 따라갑니다. 재export(`export { genAI } from "./client"`)와 네임스페이스 import(`import * as c`)는 따라가지 않습니다. 검사 경로 밖에서 import 하는 파일은 볼 수 없으므로 `client-shared` 경고로 알리고, 검사한 파일 중 import 하는 곳이 없으면 `client-exported` TODO 를 냅니다.
 - export 된 모델 핸들(`export const model = genAI.getGenerativeModel(...)`)은 옮기지 않습니다. 정의한 곳은 `handle-escapes`, import 한 곳은 `cross-module` 로 보고합니다. 클래스 필드에 저장한 클라이언트·채팅도 추적하지 않고 TODO 로 보고합니다.
 - `generateContent({ contents })`, `embedContent({ content, taskType })` 같은 요청 객체 형태는 `dynamic-model-params` 로 보고합니다.

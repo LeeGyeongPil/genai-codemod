@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.4
+node dist/cli.js --version   # 0.1.5
 ```
 
 Examples below write `genai-codemod` for `node dist/cli.js`. Run `npm link` once if you want that name on your PATH.
@@ -151,6 +151,12 @@ wrote migrated/client.ts
 wrote migrated/service.ts
 
 Summary: 2 files scanned, 2 files changed (written to migrated), 0 TODOs, 2 warnings
+
+Warnings:
+  src/client.ts:3 client-shared - This client is exported as "genAI"; 1 scanned file(s) import it and were handled in the same run (rewritten, or listed as TODOs). Files outside the scanned paths that import it need the same migration.
+  src/client.ts:3 api-version-pinned - Pinned apiVersion "v1beta" to keep the endpoint version the old SDK used. @google/genai 3.x defaults to v1 (Vertex: v1beta1); drop the pin or set GOOGLE_GENAI_API_VERSION once you have tested the default.
+
+Check the result with: genai-codemod verify <before> <after>
 ```
 
 `migrated/service.ts` now calls `genAI.models.generateContent({ model: "gemini-2.5-flash", contents: "hello" })` and returns `r.text`, and `genai-codemod verify src/service.ts migrated/service.ts` prints `MATCH`. The `client-shared` warning on `src/client.ts:3` reminds you that importers outside the scanned paths need the same change.
@@ -183,7 +189,7 @@ Warnings have codes too: `api-version-pinned`, `api-version-default-changed`, `v
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -275,7 +281,7 @@ flowchart LR
 
 ## Limitations and roadmap
 
-Known limits in 0.1.4:
+Known limits in 0.1.5:
 - Shared clients are followed only between files scanned in the same run. Re-exports (`export { genAI } from "./client"`) and namespace imports (`import * as c`) are not followed. Importers outside the scanned paths cannot be seen: the `client-shared` warning reminds you, and a `client-exported` TODO appears when no scanned file imports the client.
 - Exported model handles (`export const model = genAI.getGenerativeModel(...)`) are not moved: `handle-escapes` where defined, `cross-module` where imported. Clients or chats stored in class fields are reported as TODOs, not tracked.
 - Request-object calls such as `generateContent({ contents })` and `embedContent({ content, taskType })` are reported as `dynamic-model-params`.
