@@ -4,6 +4,14 @@
   "description": "Codemod CLI that migrates @google/generative-ai and @google-cloud/vertexai code to @google/genai and verifies the migrated code sends the same API requests.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LeeGyeongPil/genai-codemod.git"
+  },
+  "homepage": "https://github.com/LeeGyeongPil/genai-codemod#readme",
+  "bugs": {
+    "url": "https://github.com/LeeGyeongPil/genai-codemod/issues"
+  },
   "bin": {
     "genai-codemod": "dist/cli.js"
   },
