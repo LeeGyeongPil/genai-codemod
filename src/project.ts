@@ -3,6 +3,8 @@ import { dirname, join, relative, resolve } from "node:path";
 
 const EXTENSIONS = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 const SKIPPED_DIRS = new Set(["node_modules", "dist", "build"]);
+/** verify 가 원본 옆에 잠깐 만드는 임시 모듈 이름 앞부분. 스캔 대상에서 늘 뺀다. */
+export const VERIFY_TEMP_PREFIX = ".genai-codemod-";
 
 export class PathError extends Error {
   constructor(readonly path: string) {
@@ -29,7 +31,8 @@ function walk(dir: string, root: string, out: SourceEntry[], cwd: string): void 
     if (entry.isDirectory()) {
       if (SKIPPED_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
       walk(join(dir, entry.name), root, out, cwd);
-    } else if (entry.isFile() && isSource(entry.name)) {
+    } else if (entry.isFile() && isSource(entry.name) && !entry.name.startsWith(VERIFY_TEMP_PREFIX)) {
+      // 같은 폴더에서 verify 가 도는 중이면 임시 .mjs 가 보일 수 있다 — 사용자 코드가 아니므로 건너뛴다
       const abs = join(dir, entry.name);
       out.push({ abs, display: relative(cwd, abs) || abs, relative: relative(root, abs) });
     }

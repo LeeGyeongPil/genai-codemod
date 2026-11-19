@@ -1,7 +1,8 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { main } from "../src/main.js";
+import { VERIFY_TEMP_PREFIX } from "../src/project.js";
 import { transformSource, type TransformOptions } from "../src/transform/index.js";
 
 export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -16,6 +17,15 @@ export function scratch(name: string): string {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+/**
+ * Copy a shared folder (examples/, fixtures) into a scratch folder.
+ * Test files run in parallel and verify writes a short-lived .genai-codemod-*.mjs next to the
+ * file it checks, so a plain copy could pick up (or trip over) another test's temp module.
+ */
+export function copyTree(from: string, to: string): void {
+  cpSync(from, to, { recursive: true, filter: (src) => !basename(src).startsWith(VERIFY_TEMP_PREFIX) });
 }
 
 /** Transform a fixture file and write the result next to other scratch files; returns the output path. */

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { root, runCli, scratch } from "./helpers.js";
+import { copyTree, root, runCli, scratch } from "./helpers.js";
 
 const hashTree = (dir: string): string => {
   const hash = createHash("sha256");
@@ -13,7 +13,7 @@ const hashTree = (dir: string): string => {
 
 function copyApp(name: string): string {
   const dir = scratch(name);
-  cpSync(join(root, "examples", "legacy-app"), join(dir, "app"), { recursive: true });
+  copyTree(join(root, "examples", "legacy-app"), join(dir, "app"));
   return dir;
 }
 
@@ -45,7 +45,8 @@ describe("CLI", () => {
     const pkg = report.files.find((f: { path: string }) => f.path === join("app", "package.json"));
     expect(pkg.warnings.map((w: { code: string }) => w.code)).toContain("node-engine");
 
-    // rerun on the written result: nothing left to change, exit 0 (idempotent)
+    // rerun on the written result: nothing left to change (idempotent); exit 1 only because the
+    // text-throws-on-block marker TODO is still there
     const rerun = await runCli(["app"], {}, cwd);
     expect(rerun.stdout).toContain("0 files changed");
     // only the marker comment of the blocked-answer TODO is left (see regressions.test.ts)

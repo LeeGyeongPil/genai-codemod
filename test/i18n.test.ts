@@ -1,8 +1,7 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { messageKeys, resolveLang, t } from "../src/i18n.js";
-import { fixture, root, runCli, scratch, transformToScratch } from "./helpers.js";
-import { cpSync } from "node:fs";
+import { copyTree, fixture, root, runCli, scratch, transformToScratch } from "./helpers.js";
 
 describe("language resolution and identical message keys", () => {
   it("--lang beats GENAI_CODEMOD_LANG beats LC_ALL beats LC_MESSAGES beats LANG", () => {
@@ -42,7 +41,7 @@ describe("language resolution and identical message keys", () => {
     expect(ko.stdout).toContain("사용법:");
 
     const cwd = scratch("i18n-app");
-    cpSync(join(root, "examples", "legacy-app"), join(cwd, "app"), { recursive: true });
+    copyTree(join(root, "examples", "legacy-app"), join(cwd, "app"));
     const sumEn = await runCli(["app", "--lang", "en"], { LANG: "ko_KR.UTF-8" }, cwd);
     const sumKo = await runCli(["app", "--lang", "ko"], { LANG: "en_US.UTF-8" }, cwd);
     expect(sumEn.stdout).toContain("Summary:");
@@ -65,7 +64,7 @@ describe("language resolution and identical message keys", () => {
 
   it("report codes do not depend on the language", async () => {
     const cwd = scratch("i18n-report");
-    cpSync(join(root, "examples", "legacy-app"), join(cwd, "app"), { recursive: true });
+    copyTree(join(root, "examples", "legacy-app"), join(cwd, "app"));
     await runCli(["app", "--lang", "en", "--report", "en.json"], {}, cwd);
     await runCli(["app", "--lang", "ko", "--report", "ko.json"], {}, cwd);
     const { readFileSync } = await import("node:fs");

@@ -41,7 +41,7 @@ verify 는 사용자의 코드(진입 함수)를 가짜 fetch 아래에서 실�
   "err.usage": "사용 오류: {detail}. genai-codemod --help 를 확인하세요.",
   "err.parse": "{path} 를 파싱할 수 없습니다: {detail}",
   "err.verifyArgs": "verify 에는 파일 두 개가 필요합니다: genai-codemod verify <전> <후>.",
-  "err.entryMissing": "{file} 에 \"{entry}\" 라는 이름의 async 함수가 내보내져 있지 않습니다. 하나 내보내거나(--entry <이름>) 지정하세요. verify 는 인자 없이 호출합니다.",
+  "err.entryMissing": "{file} 에 \"{entry}\" 라는 이름의 async 함수가 내보내져 있지 않습니다. async 함수를 내보내거나 --entry <이름> 으로 지정하세요. verify 는 인자 없이 호출합니다.",
   "err.sdkMissing": "{file} 에 필요한 \"{pkg}\" 를 불러오지 못했습니다. 검사를 위해 구 SDK 와 새 SDK 를 모두 개발 의존성으로 설치하세요. 예: npm install -D @google/generative-ai @google/genai.",
   "err.authMissing": "--vertex 에는 {pkg} 와 그 google-auth-library 설치가 필요합니다({file} 기준으로 찾았습니다).",
   "err.verifyRun": "{file} 실행에 실패했습니다: {detail}",

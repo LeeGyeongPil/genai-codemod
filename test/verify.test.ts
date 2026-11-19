@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { verifyFiles } from "../src/verify/index.js";
 import { VerifyError } from "../src/verify/errors.js";
-import { fixture, runCli, scratch, transformToScratch } from "./helpers.js";
+import { VERIFY_TEMP_PREFIX } from "../src/project.js";
+import { copyTree, fixture, runCli, scratch, transformToScratch } from "./helpers.js";
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const ok = { entry: "run", response: "ok", vertex: false } as const;
 const blocked = { entry: "run", response: "blocked", vertex: false } as const;
@@ -139,6 +140,26 @@ describe("verify error handling", () => {
     expect(cli.stderr).toContain("npm install -D");
   });
 
+  it("names the typed path when before and after share a file name (F-1)", async () => {
+    const dir = scratch("nosdk-same-name");
+    const { mkdirSync } = await import("node:fs");
+    mkdirSync(join(dir, "new"));
+    writeFileSync(join(dir, "gemini.ts"), "export async function run() {}\n");
+    writeFileSync(join(dir, "new", "gemini.ts"), 'import "@google/does-not-exist-sdk";\nexport async function run() {}\n');
+    const cli = await runCli(["verify", "gemini.ts", join("new", "gemini.ts")], {}, dir);
+    expect(cli.code).toBe(2);
+    expect(cli.stderr).toContain(`for ${join("new", "gemini.ts")}.`);
+  });
+
+  it("the Korean --entry hint reads as one clear instruction (F-2)", async () => {
+    const dir = scratch("noentry-ko");
+    const file = join(dir, "x.ts");
+    writeFileSync(file, "export const notAFunction = 1;\n");
+    const cli = await runCli(["verify", file, file, "--lang", "ko"]);
+    expect(cli.code).toBe(2);
+    expect(cli.stderr).toContain("async 함수를 내보내거나 --entry <이름> 으로 지정하세요");
+  });
+
   it("rejects bad arguments with exit 2", async () => {
     expect((await runCli(["verify", "only-one.ts"])).code).toBe(2);
     expect((await runCli(["verify", "a.ts", "b.ts", "--response", "weird"])).code).toBe(2);
@@ -146,10 +167,24 @@ describe("verify error handling", () => {
   });
 
   it("leaves no temporary files behind", async () => {
-    const before = fixture("gemini-basic", "before.ts");
+    // Use a private copy: other test files verify the shared fixture at the same time, and their
+    // short-lived temp modules would make this check flaky (it failed on CI that way).
+    const dir = scratch("cleanup-src");
+    copyTree(fixture("gemini-basic"), dir);
+    const before = join(dir, "before.ts");
     const { out } = transformToScratch(before, "cleanup");
     await verifyFiles(before, out, ok, "en");
     const { readdirSync } = await import("node:fs");
-    expect(readdirSync(fixture("gemini-basic")).filter((f) => f.startsWith(".genai-codemod-"))).toEqual([]);
+    expect(readdirSync(dir).filter((f) => f.startsWith(VERIFY_TEMP_PREFIX))).toEqual([]);
+    expect(readdirSync(dirname(out)).filter((f) => f.startsWith(VERIFY_TEMP_PREFIX))).toEqual([]);
+  });
+
+  it("a scan never picks up a verify temp module lying next to the sources", async () => {
+    const cwd = scratch("temp-skip");
+    copyTree(fixture("gemini-basic"), join(cwd, "app"));
+    writeFileSync(join(cwd, "app", `${VERIFY_TEMP_PREFIX}deadbeef-before.ts.mjs`), "export {};\n");
+    const res = await runCli(["app"], {}, cwd);
+    expect(res.stdout).toMatch(/Summary: 2 files scanned/);
+    expect(res.stdout).not.toContain(VERIFY_TEMP_PREFIX);
   });
 });

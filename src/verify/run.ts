@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createFakeAuthClient } from "./auth.js";
 import type { CapturedRequest, RunOutcome } from "./compare.js";
 import { VerifyError } from "./errors.js";
+import { VERIFY_TEMP_PREFIX } from "../project.js";
 import { cannedResponse, type MockResponseKind } from "./responses.js";
 import { loadHook, makeResolve } from "./hooks.js";
 import { toModuleSource } from "./transpile.js";
@@ -88,7 +89,7 @@ export async function runWithMock(file: string, options: RunOptions, siblingsFro
   }
 
   // The temp module sits next to the original so its imports resolve from the user's project.
-  const temp = join(dirname(abs), `.genai-codemod-${randomBytes(4).toString("hex")}-${basename(abs)}.mjs`);
+  const temp = join(dirname(abs), `${VERIFY_TEMP_PREFIX}${randomBytes(4).toString("hex")}-${basename(abs)}.mjs`);
   // Local imports ("./helper.js") are resolved and transpiled by the hooks, TypeScript files included.
   const hookData = { from: dirname(abs), to: siblingsFrom };
   const unregister = registerLocalImports(hookData);
