@@ -11,10 +11,22 @@ const cli = ["dist/cli.js"];
 // No --lang is passed on purpose: the CLI resolves the language from the same environment.
 const lang = resolveLang(undefined, process.env);
 
+// Each step finishes in a few seconds; a step that hangs is stopped instead of blocking forever (CI).
+const STEP_TIMEOUT_S = 120;
+
 function step(title, args, { expectExit = [0] } = {}) {
   console.log(`\n=== ${title}`);
   console.log(`$ genai-codemod ${args.join(" ")}\n`);
-  const result = spawnSync(process.execPath, [...cli, ...args], { cwd: root, stdio: "inherit" });
+  const result = spawnSync(process.execPath, [...cli, ...args], {
+    cwd: root,
+    stdio: "inherit",
+    timeout: STEP_TIMEOUT_S * 1000,
+    killSignal: "SIGKILL",
+  });
+  if (result.error?.code === "ETIMEDOUT") {
+    console.error("\n" + t(lang, "demo.timeout", { seconds: STEP_TIMEOUT_S }));
+    process.exit(1);
+  }
   if (!expectExit.includes(result.status)) {
     console.error("\n" + t(lang, "demo.unexpectedExit", { code: result.status, expected: expectExit.join(" / ") }));
     process.exit(1);

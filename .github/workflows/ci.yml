@@ -9,12 +9,15 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # 전체가 2~3분이면 끝난다. 멈춘 자식 프로세스가 있으면 6시간 대신 15분 안에 실패로 끝낸다
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: npm
+      - run: node --version && npm --version   # 실패 로그를 읽을 때 런타임 버전을 바로 확인
       - run: npm ci
       - run: npm test
         env:
