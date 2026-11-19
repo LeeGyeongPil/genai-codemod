@@ -95,5 +95,6 @@ verify runs YOUR code (the entry function) with a fake fetch; use it on code you
   "demo.done": "Done. Open .demo-out/ to see the migrated files.",
   "demo.next": "Next: npm run demo:hidden shows two differences that only verify can catch.",
   "demo.unexpectedExit": "Unexpected exit code {code} (expected {expected}).",
+  "demo.timeout": "The step did not finish within {seconds} s and was stopped. Run the command above on its own to see where it hangs.",
   "warn.duplicate-genai": "Both @google-cloud/vertexai and @google/genai are dependencies; the old package pulls in its own copy of @google/genai. Remove @google-cloud/vertexai after the migration."
 } as const;

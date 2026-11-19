@@ -26,8 +26,17 @@ function isSource(name: string): boolean {
   return EXTENSIONS.test(name) && !/\.d\.(ts|mts|cts)$/.test(name);
 }
 
+/**
+ * 이름을 코드 포인트 순서로 비교한다. localeCompare 는 실행 환경의 로캘(LANG, ICU)에 따라 순서가
+ * 달라져 같은 폴더라도 macOS·Linux·CI 에서 diff·보고서 순서가 달라질 수 있다.
+ */
+export function byName(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function walk(dir: string, root: string, out: SourceEntry[], cwd: string): void {
-  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+  // readdir 순서는 파일 시스템마다 다르다(ext4 는 해시 순) — 항상 정렬해서 결과를 고정한다
+  for (const entry of readdirSync(dir, { withFileTypes: true }).sort((a, b) => byName(a.name, b.name))) {
     if (entry.isDirectory()) {
       if (SKIPPED_DIRS.has(entry.name) || entry.name.startsWith(".")) continue;
       walk(join(dir, entry.name), root, out, cwd);

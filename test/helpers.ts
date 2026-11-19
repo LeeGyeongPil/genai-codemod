@@ -11,6 +11,13 @@ const tmpRoot = join(root, "test", ".tmp");
 
 export const read = (path: string): string => readFileSync(path, "utf8");
 
+/**
+ * Options for every spawnSync in the tests. spawnSync blocks the worker's event loop, so vitest's own
+ * testTimeout cannot fire while a child hangs; without this a hanging child would stall CI until the
+ * job limit instead of failing with a message.
+ */
+export const CHILD = { encoding: "utf8", timeout: 45_000, killSignal: "SIGKILL" } as const;
+
 /** Fresh scratch folder inside the repo (so fixtures resolve the SDKs from node_modules). */
 export function scratch(name: string): string {
   const dir = join(tmpRoot, name);

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { spawnSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { copyTree, root, runCli, scratch } from "./helpers.js";
+import { CHILD, copyTree, root, runCli, scratch } from "./helpers.js";
 
 const hashTree = (dir: string): string => {
   const hash = createHash("sha256");
@@ -100,7 +100,7 @@ describe("CLI", () => {
   it("the built bin prints its version", () => {
     const dist = join(root, "dist", "cli.js");
     if (!existsSync(dist)) return; // built by `npm test` via pretest
-    const out = spawnSync(process.execPath, [dist, "--version"], { encoding: "utf8" });
+    const out = spawnSync(process.execPath, [dist, "--version"], CHILD);
     expect(out.status).toBe(0);
     expect(out.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
   });

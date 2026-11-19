@@ -96,5 +96,6 @@ verify 는 사용자의 코드(진입 함수)를 가짜 fetch 아래에서 실�
   "demo.done": "완료. .demo-out/ 을 열어 이전된 파일을 확인하세요.",
   "demo.next": "다음: npm run demo:hidden 은 verify 만 잡아내는 차이 두 가지를 보여 줍니다.",
   "demo.unexpectedExit": "예상 밖의 종료 코드 {code} (기대값 {expected}).",
+  "demo.timeout": "이 단계가 {seconds}초 안에 끝나지 않아 멈췄습니다. 위 명령을 따로 실행해 어디서 멈추는지 확인하세요.",
   "warn.duplicate-genai": "@google-cloud/vertexai 와 @google/genai 가 함께 의존성에 있습니다. 구 패키지가 자기 몫의 @google/genai 를 끌고 옵니다. 이전이 끝나면 @google-cloud/vertexai 를 제거하세요."
 };

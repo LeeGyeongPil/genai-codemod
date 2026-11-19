@@ -2,17 +2,18 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { byName, collectFiles } from "../src/project.js";
 import { transformSource } from "../src/transform/index.js";
 import { verifyFiles } from "../src/verify/index.js";
-import { fixture, read, root, runCli, scratch } from "./helpers.js";
+import { CHILD, fixture, read, root, runCli, scratch } from "./helpers.js";
 
 const ok = { entry: "run", response: "ok", vertex: false } as const;
 
 describe("demo script follows the CLI language (Q-1)", () => {
   const demo = (env: Record<string, string>) =>
     spawnSync(process.execPath, ["scripts/demo.mjs"], {
+      ...CHILD,
       cwd: root,
-      encoding: "utf8",
       env: { PATH: process.env["PATH"] ?? "", ...env },
     });
 
@@ -24,7 +25,7 @@ describe("demo script follows the CLI language (Q-1)", () => {
     expect(res.stdout).not.toContain("=== 1. Dry run");
     expect(res.stdout).not.toContain("Done.");
     expect(res.stdout).toContain("요약:");
-  });
+  }, 120_000);
 
   it("LANG=ko_KR.UTF-8 alone is honoured too, and the default is English", () => {
     const ko = demo({ LANG: "ko_KR.UTF-8" });
@@ -36,7 +37,7 @@ describe("demo script follows the CLI language (Q-1)", () => {
 });
 
 const builtCli = (args: string[], cwd: string) =>
-  spawnSync(process.execPath, [join(root, "dist", "cli.js"), "--lang", "en", ...args], { cwd, encoding: "utf8" });
+  spawnSync(process.execPath, [join(root, "dist", "cli.js"), "--lang", "en", ...args], { ...CHILD, cwd });
 
 describe("verify resolves local imports (Q-2)", () => {
   const legacy = `import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -256,8 +257,8 @@ describe("verify explains a missing relative import (Q-3)", () => {
     expect(en.stderr).toContain("git archive HEAD src | tar -x -C old");
     expect(en.stderr).not.toContain(".genai-codemod-");
     const ko = spawnSync(process.execPath, [join(root, "dist", "cli.js"), "--lang", "ko", "verify", "old/service.ts", "src/service.ts"], {
+      ...CHILD,
       cwd: dir,
-      encoding: "utf8",
     });
     expect(ko.stderr).toContain("old/service.ts 이(가) import 하는 ./client.js 를 그 옆에서 찾지 못했습니다");
   });
@@ -269,5 +270,32 @@ describe("verify explains a missing relative import (Q-3)", () => {
     const cli = builtCli(["verify", "old/src/service.ts", "src/service.ts"], dir);
     expect(cli.stderr).toBe("");
     expect(cli.status).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Round 6 (CI hardening): results must not depend on the machine (locale, file system order), and
+// the CLI must not hang when the user's entry function leaves something running.
+
+describe("same results on every machine", () => {
+  it("files are scanned in code point order, whatever the locale", () => {
+    // localeCompare would give _util, alpha, beta, beta-2, Zeta under en_US and another order elsewhere
+    const names = ["beta.ts", "Zeta.ts", "alpha.ts", "_util.ts", "beta-2.ts"];
+    const dir = project("scan-order", Object.fromEntries(names.map((n) => [join("src", n), "export {};\n"])));
+    const shown = collectFiles(["src"], dir).map((f) => f.display);
+    expect(shown).toEqual(["Zeta.ts", "_util.ts", "alpha.ts", "beta-2.ts", "beta.ts"].map((n) => join("src", n)));
+    expect([...names].sort(byName)).toEqual(["Zeta.ts", "_util.ts", "alpha.ts", "beta-2.ts", "beta.ts"]);
+  });
+
+  it("verify exits when the entry function leaves a timer running", () => {
+    // user code may keep the event loop alive (timers, keep-alive sockets); the CLI must still end
+    const file = 'export async function run() {\n  setInterval(() => undefined, 1000);\n  return "done";\n}\n';
+    const dir = project("lingering-timer", { "old.ts": file, "new.ts": file });
+    const started = Date.now();
+    const cli = builtCli(["verify", "old.ts", "new.ts"], dir);
+    expect(cli.error).toBeUndefined(); // no ETIMEDOUT from the CHILD timeout
+    expect(cli.status).toBe(0);
+    expect(cli.stdout).toContain("Result: MATCH");
+    expect(Date.now() - started).toBeLessThan(30_000);
   });
 });
