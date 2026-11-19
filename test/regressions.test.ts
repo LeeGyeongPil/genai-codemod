@@ -1,0 +1,273 @@
+import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import { transformSource } from "../src/transform/index.js";
+import { verifyFiles } from "../src/verify/index.js";
+import { fixture, read, root, runCli, scratch } from "./helpers.js";
+
+const ok = { entry: "run", response: "ok", vertex: false } as const;
+
+describe("demo script follows the CLI language (Q-1)", () => {
+  const demo = (env: Record<string, string>) =>
+    spawnSync(process.execPath, ["scripts/demo.mjs"], {
+      cwd: root,
+      encoding: "utf8",
+      env: { PATH: process.env["PATH"] ?? "", ...env },
+    });
+
+  it("GENAI_CODEMOD_LANG=ko gives Korean step titles and no English ones", () => {
+    const res = demo({ GENAI_CODEMOD_LANG: "ko", LANG: "en_US.UTF-8" });
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("=== 1. 파일 하나로 드라이런");
+    expect(res.stdout).toContain("완료.");
+    expect(res.stdout).not.toContain("=== 1. Dry run");
+    expect(res.stdout).not.toContain("Done.");
+    expect(res.stdout).toContain("요약:");
+  });
+
+  it("LANG=ko_KR.UTF-8 alone is honoured too, and the default is English", () => {
+    const ko = demo({ LANG: "ko_KR.UTF-8" });
+    expect(ko.stdout).toContain("=== 3. verify: Gemini API 코드");
+    const en = demo({ LANG: "C" });
+    expect(en.stdout).toContain("=== 3. verify: Gemini API code");
+    expect(en.stdout).not.toContain("완료");
+  }, 120_000);
+});
+
+const builtCli = (args: string[], cwd: string) =>
+  spawnSync(process.execPath, [join(root, "dist", "cli.js"), "--lang", "en", ...args], { cwd, encoding: "utf8" });
+
+describe("verify resolves local imports (Q-2)", () => {
+  const legacy = `import { GoogleGenerativeAI } from "@google/generative-ai";
+import { PROMPT } from "./helper.js";
+
+const genAI = new GoogleGenerativeAI("test-key");
+
+export async function run(): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const r = await model.generateContent(PROMPT);
+  return r.response.text();
+}
+`;
+  const helper = 'export const PROMPT: string = "hello from the helper";\n';
+
+  it("works for an in-place copy and for --out-dir output that did not copy the helper", async () => {
+    const dir = scratch("local-imports");
+    mkdirSync(join(dir, "old"));
+    writeFileSync(join(dir, "old", "app.ts"), legacy);
+    writeFileSync(join(dir, "old", "helper.ts"), helper);
+
+    // migrate into an out dir: only app.ts is written there, helper.ts stays in old/
+    const migrated = await runCli(["old", "--out-dir", "new"], {}, dir);
+    expect(migrated.stdout).toContain("(written to new)");
+    // the built CLI is used on purpose: under vitest the temp module is evaluated by vite, not by Node's loader
+    const cli = builtCli(["verify", "old/app.ts", "new/app.ts", "--json"], dir);
+    expect(cli.stderr).toBe("");
+    expect(cli.status).toBe(0);
+    expect(JSON.parse(cli.stdout).requests.after[0].body.contents[0].parts[0].text).toBe("hello from the helper");
+
+    // extensionless imports and a nested folder resolve as well
+    mkdirSync(join(dir, "old", "lib"));
+    writeFileSync(join(dir, "old", "lib", "text.ts"), 'export const WORD = "nested";\n');
+    writeFileSync(join(dir, "old", "helper.ts"), 'import { WORD } from "./lib/text";\nexport const PROMPT = `hi ${WORD}`;\n');
+    const again = builtCli(["verify", "old/app.ts", "new/app.ts", "--json"], dir);
+    expect(again.status).toBe(0);
+    expect(again.stdout).toContain("hi nested");
+  });
+});
+
+describe("unknown option keeps the requested language (Q-6)", () => {
+  it("--lang en wins over LANG=ko even when parseArgs fails", async () => {
+    const res = await runCli(["--bogus", "--lang", "en"], { LANG: "ko_KR.UTF-8" });
+    expect(res.code).toBe(2);
+    expect(res.stderr).toBe("Unknown option --bogus. Run genai-codemod --help.\n");
+  });
+
+  it("Korean when asked with --lang=ko", async () => {
+    const res = await runCli(["--lang=ko", "--bogus"], { LANG: "en_US.UTF-8" });
+    expect(res.stderr).toBe("알 수 없는 옵션 --bogus. genai-codemod --help 를 확인하세요.\n");
+  });
+});
+
+describe("text-throws-on-block leaves a trace in the code (Q-7)", () => {
+  const before = fixture("blocked-try-catch", "before.ts");
+
+  it("writes a marker comment and keeps reporting it on rerun", () => {
+    const first = transformSource(before, read(before), { apiVersion: "keep" });
+    expect(first.todos.map((t) => t.code)).toEqual(["text-throws-on-block"]);
+    expect(first.output).toContain("// genai-codemod TODO(text-throws-on-block)");
+    expect(first.output).toContain("    return r.text;");
+    // the marker sits on its own line directly above the statement, with its indentation
+    expect(first.output).toMatch(/\n {4}\/\/ genai-codemod TODO\(text-throws-on-block\)[^\n]*\n {4}return r\.text;/);
+
+    const rerun = transformSource(before, first.output, { apiVersion: "keep" });
+    expect(rerun.changed).toBe(false);
+    expect(rerun.todos.map((t) => t.code)).toEqual(["text-throws-on-block"]);
+
+    // removing the comment (the user dealt with it) ends the report
+    const cleaned = first.output.replace(/ *\/\/ genai-codemod TODO[^\n]*\n/, "");
+    expect(transformSource(before, cleaned, { apiVersion: "keep" }).todos).toEqual([]);
+  });
+
+  it("the marker survives a verify run (valid code)", async () => {
+    const dir = scratch("marker");
+    const out = join(dir, "after.ts");
+    writeFileSync(out, transformSource(before, read(before), { apiVersion: "keep" }).output);
+    const verified = await verifyFiles(before, out, { ...ok, response: "blocked" }, "en");
+    expect(verified.match).toBe(false);
+    expect(readFileSync(out, "utf8")).toContain("TODO(text-throws-on-block)");
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Round 3 (QA round 2): a client created in one module and imported by another (Q-1), and the
+// verify message when a relative import of the old copy is missing (Q-3).
+
+const CLIENT = `import { GoogleGenerativeAI } from "@google/generative-ai";
+
+export const genAI = new GoogleGenerativeAI("test-key");
+`;
+const SERVICE = `import { genAI } from "./client.js";
+
+export async function run(): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const r = await model.generateContent("hello");
+  return r.response.text();
+}
+`;
+
+/** Write `files` (relative path -> text) under a fresh scratch folder. */
+function project(name: string, files: Record<string, string>): string {
+  const dir = scratch(name);
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(join(dir, path, ".."), { recursive: true });
+    writeFileSync(join(dir, path), text);
+  }
+  return dir;
+}
+
+const codes = (stdout: string): string[] => [...stdout.matchAll(/^ {2}(\S+):(\d+) (\S+) - /gm)].map((m) => `${m[1]}:${m[2]} ${m[3]}`);
+
+describe("shared client across modules (Q-1)", () => {
+  it("scanning both files migrates the importer too, and verify matches", async () => {
+    const dir = project("shared-client", { "src/client.ts": CLIENT, "src/service.ts": SERVICE });
+    const res = await runCli(["src", "--out-dir", "migrated"], {}, dir);
+    expect(res.code).toBe(0);
+    expect(codes(res.stdout)).toContain("src/client.ts:3 client-shared");
+    const service = read(join(dir, "migrated", "service.ts"));
+    expect(service).toContain('const r = await genAI.models.generateContent({ model: "gemini-2.5-flash", contents: "hello" });');
+    expect(service).toContain("return r.text;");
+    expect(service).not.toContain("getGenerativeModel");
+    expect(read(join(dir, "migrated", "client.ts"))).toContain("new GoogleGenAI(");
+
+    const cli = builtCli(["verify", "src/service.ts", "migrated/service.ts"], dir);
+    expect(cli.stderr).toBe("");
+    expect(cli.stdout).toContain("Result: MATCH");
+    expect(cli.status).toBe(0);
+  });
+
+  it("scanning only the client reports client-exported (exit 1)", async () => {
+    const dir = project("shared-client-alone", { "src/client.ts": CLIENT, "src/service.ts": SERVICE });
+    const res = await runCli(["src/client.ts"], {}, dir);
+    expect(res.code).toBe(1);
+    expect(codes(res.stdout)).toEqual(["src/client.ts:3 client-exported", "src/client.ts:3 api-version-pinned"]);
+    const ko = await runCli(["src/client.ts", "--lang", "ko"], {}, dir);
+    expect(ko.stdout).toContain('이 클라이언트는 "genAI" 으로 export 되고');
+  });
+
+  it("scanning only the importer (or after the client was written) reports cross-module (exit 1)", async () => {
+    const dir = project("shared-client-importer", { "src/client.ts": CLIENT, "src/service.ts": SERVICE });
+    const res = await runCli(["src/service.ts", "--report", "r.json"], {}, dir);
+    expect(res.code).toBe(1);
+    expect(codes(res.stdout)).toEqual(["src/service.ts:4 cross-module"]);
+    const report = JSON.parse(read(join(dir, "r.json")));
+    expect(report.files[0].todos[0]).toMatchObject({ code: "cross-module", line: 4 });
+
+    // client.ts already migrated, service.ts not: the rerun must not be silent
+    await runCli(["src/client.ts", "--write"], {}, dir);
+    const half = await runCli(["src"], {}, dir);
+    expect(half.code).toBe(1);
+    expect(codes(half.stdout)).toEqual(["src/service.ts:4 cross-module"]);
+  });
+
+  it("--write on the folder is idempotent and leaves runnable code", async () => {
+    const dir = project("shared-client-write", { "src/client.ts": CLIENT, "src/service.ts": SERVICE });
+    expect((await runCli(["src", "--write"], {}, dir)).code).toBe(0);
+    const rerun = await runCli(["src"], {}, dir);
+    expect(rerun.code).toBe(0);
+    expect(rerun.stdout).toContain("0 files changed");
+    expect(rerun.stdout).toContain("0 TODOs");
+  });
+
+  it("aliases, default exports, extensionless paths and CommonJS are followed", async () => {
+    const dir = project("shared-client-forms", {
+      "lib/a.ts": 'import { GoogleGenerativeAI } from "@google/generative-ai";\nconst genAI = new GoogleGenerativeAI("k");\nexport { genAI as client };\n',
+      "lib/b.ts": 'import { GoogleGenerativeAI } from "@google/generative-ai";\nexport default new GoogleGenerativeAI("k");\n',
+      "lib/c.cjs": 'const { GoogleGenerativeAI } = require("@google/generative-ai");\nconst genAI = new GoogleGenerativeAI("k");\nmodule.exports = { genAI };\n',
+      "use-a.ts": 'import { client as ai } from "./lib/a";\nexport const go = () => ai.getGenerativeModel({ model: "m" }).generateContent("x");\nexport async function run() {\n  const model = ai.getGenerativeModel({ model: "m" });\n  return (await model.generateContent("x")).response.text();\n}\n',
+      "use-b.ts": 'import gen from "./lib/b.js";\nexport async function run() {\n  const model = gen.getGenerativeModel({ model: "m" });\n  return (await model.countTokens("x")).totalTokens;\n}\n',
+      "use-c.cjs": 'const { genAI } = require("./lib/c.cjs");\nasync function run() {\n  const model = genAI.getGenerativeModel({ model: "m" });\n  return (await model.generateContent("x")).response.text();\n}\nmodule.exports = { run };\n',
+    });
+    const res = await runCli([".", "--out-dir", "out"], {}, dir);
+    // use-a.ts line 2 chains getGenerativeModel(...) without a variable: reported, not guessed
+    expect(codes(res.stdout).filter((c) => !c.includes("api-version"))).toEqual([
+      "use-a.ts:2 handle-escapes", // TODOs are listed before warnings
+      "lib/a.ts:3 client-shared",
+      "lib/b.ts:2 client-shared",
+      "lib/c.cjs:3 client-shared",
+    ]);
+    expect(read(join(dir, "out", "use-a.ts"))).toContain('return (await ai.models.generateContent({ model: "m", contents: "x" })).text;');
+    expect(read(join(dir, "out", "use-b.ts"))).toContain('return (await gen.models.countTokens({ model: "m", contents: "x" })).totalTokens;');
+    expect(read(join(dir, "out", "use-c.cjs"))).toContain('return (await genAI.models.generateContent({ model: "m", contents: "x" })).text;');
+  });
+
+  it("an exported model handle is reported where it is defined and where it is imported", async () => {
+    const dir = project("shared-handle", {
+      "src/model.ts":
+        'import { GoogleGenerativeAI } from "@google/generative-ai";\nconst genAI = new GoogleGenerativeAI("k");\nexport const model = genAI.getGenerativeModel({ model: "m" });\n',
+      "src/use.ts": 'import { model } from "./model.js";\nexport const run = async () => (await model.generateContent("x")).response.text();\n',
+    });
+    const res = await runCli(["src"], {}, dir);
+    expect(res.code).toBe(1);
+    expect(codes(res.stdout)).toEqual(
+      expect.arrayContaining(["src/model.ts:3 handle-escapes", "src/use.ts:1 cross-module"]),
+    );
+  });
+
+  it("an imported client whose constructor was not rewritten stays untouched in the importer", async () => {
+    const dir = project("shared-client-dynamic", {
+      "src/client.ts": 'import { GoogleGenerativeAI } from "@google/generative-ai";\nconst args = ["k"] as const;\nexport const genAI = new GoogleGenerativeAI(...args);\n',
+      "src/service.ts": SERVICE,
+    });
+    const res = await runCli(["src"], {}, dir);
+    expect(res.code).toBe(1);
+    expect(codes(res.stdout)).toEqual(["src/client.ts:3 dynamic-model-params", "src/service.ts:4 cross-module"]);
+    expect(res.stdout).not.toContain("+++ b/src/service.ts"); // the importer is not touched
+  });
+});
+
+describe("verify explains a missing relative import (Q-3)", () => {
+  it("names the user's file and the specifier, with the fix, in en and ko", async () => {
+    const dir = project("missing-local", { "src/client.ts": CLIENT, "src/service.ts": SERVICE, "old/service.ts": SERVICE });
+    const en = builtCli(["verify", "old/service.ts", "src/service.ts"], dir);
+    expect(en.status).toBe(2);
+    expect(en.stderr).toContain("old/service.ts imports ./client.js, which was not found next to it (old/client.js).");
+    expect(en.stderr).toContain("git archive HEAD src | tar -x -C old");
+    expect(en.stderr).not.toContain(".genai-codemod-");
+    const ko = spawnSync(process.execPath, [join(root, "dist", "cli.js"), "--lang", "ko", "verify", "old/service.ts", "src/service.ts"], {
+      cwd: dir,
+      encoding: "utf8",
+    });
+    expect(ko.stderr).toContain("old/service.ts 이(가) import 하는 ./client.js 를 그 옆에서 찾지 못했습니다");
+  });
+
+  it("restoring the old tree (the suggested fix) makes verify match", async () => {
+    // same layout as `mkdir old && git archive HEAD src | tar -x -C old` after --write
+    const dir = project("restored-tree", { "old/src/client.ts": CLIENT, "old/src/service.ts": SERVICE, "src/client.ts": CLIENT, "src/service.ts": SERVICE });
+    expect((await runCli(["src", "--write"], {}, dir)).code).toBe(0);
+    const cli = builtCli(["verify", "old/src/service.ts", "src/service.ts"], dir);
+    expect(cli.stderr).toBe("");
+    expect(cli.status).toBe(0);
+  });
+});

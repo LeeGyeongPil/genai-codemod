@@ -1,0 +1,46 @@
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { main } from "../src/main.js";
+import { transformSource, type TransformOptions } from "../src/transform/index.js";
+
+export const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const fixture = (...parts: string[]): string => join(root, "test", "fixtures", ...parts);
+const tmpRoot = join(root, "test", ".tmp");
+
+export const read = (path: string): string => readFileSync(path, "utf8");
+
+/** Fresh scratch folder inside the repo (so fixtures resolve the SDKs from node_modules). */
+export function scratch(name: string): string {
+  const dir = join(tmpRoot, name);
+  rmSync(dir, { recursive: true, force: true });
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** Transform a fixture file and write the result next to other scratch files; returns the output path. */
+export function transformToScratch(source: string, scratchName: string, opts: TransformOptions = { apiVersion: "keep" }) {
+  const result = transformSource(source, read(source), opts);
+  const out = join(scratch(scratchName), "after.ts");
+  writeFileSync(out, result.output);
+  return { result, out };
+}
+
+export interface CliResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export async function runCli(args: string[], env: Record<string, string> = {}, cwd = root): Promise<CliResult> {
+  let stdout = "";
+  let stderr = "";
+  const code = await main(args, {
+    stdout: (s) => void (stdout += s),
+    stderr: (s) => void (stderr += s),
+    cwd,
+    env: { LANG: "en_US.UTF-8", ...env },
+    isTTY: false,
+  });
+  return { code, stdout, stderr };
+}
