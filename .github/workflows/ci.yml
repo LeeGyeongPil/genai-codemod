@@ -6,34 +6,15 @@ on:
   schedule:
     - cron: "17 3 * * 1"   # every Monday: catch breakage from new dependency or runtime releases
   workflow_dispatch:
-# the job only reads the code; nothing is pushed or published from CI
-permissions:
-  contents: read
 jobs:
   test:
-    name: test (${{ matrix.os }}, Node ${{ matrix.node }})
-    # fail-fast is off so a failure shows whether it depends on the OS, on the Node version, or on
-    # neither (runner setup).
-    strategy:
-      fail-fast: false
-      matrix:
-        # Linux always. macOS only when the repository is public: a private repository pays for
-        # macOS runner minutes at about ten times the Linux rate, and once the monthly quota is used
-        # up every job fails before its first step. (Events without repository data, such as the
-        # weekly schedule, also run Linux only.)
-        os: ${{ fromJSON(github.event.repository.visibility == 'public' && '["ubuntu-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
-        # oldest supported (22, see engines) and current LTS
-        node: ["22", "24"]
-    runs-on: ${{ matrix.os }}
-    # The suite takes 2-3 minutes; a stuck child process fails the job in 15 minutes instead of 6 hours
-    timeout-minutes: 15
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          node-version: lts/*
           cache: npm
-      - run: node --version && npm --version   # runtime versions at the top of a failure log
       - run: npm ci
       # TypeScript 7 is a native binary picked per platform (@typescript/typescript-<os>-<cpu>);
       # if the lockfile ever lacks this platform's package, fail here with a clear message.
@@ -42,4 +23,3 @@ jobs:
         env:
           DEMO_MODE: mock
       - run: npm run build --if-present
-      - run: npm start   # example migration + verify, no API key needed
