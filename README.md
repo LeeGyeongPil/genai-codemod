@@ -41,7 +41,7 @@ git clone https://github.com/LeeGyeongPil/genai-codemod.git
 cd genai-codemod
 npm install
 npm run build
-node dist/cli.js --version   # 0.1.5
+node dist/cli.js --version   # 0.1.6
 ```
 
 Examples below write `genai-codemod` for `node dist/cli.js`. Run `npm link` once if you want that name on your PATH.
@@ -189,7 +189,7 @@ Warnings have codes too: `api-version-pinned`, `api-version-default-changed`, `v
 ```json
 {
   "tool": "genai-codemod",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "apiVersionMode": "keep",
   "summary": { "filesScanned": 5, "filesChanged": 4, "todos": 1, "warnings": 6 },
   "files": [
@@ -281,7 +281,7 @@ flowchart LR
 
 ## Limitations and roadmap
 
-Known limits in 0.1.5:
+Known limits in 0.1.6:
 - Shared clients are followed only between files scanned in the same run. Re-exports (`export { genAI } from "./client"`) and namespace imports (`import * as c`) are not followed. Importers outside the scanned paths cannot be seen: the `client-shared` warning reminds you, and a `client-exported` TODO appears when no scanned file imports the client.
 - Exported model handles (`export const model = genAI.getGenerativeModel(...)`) are not moved: `handle-escapes` where defined, `cross-module` where imported. Clients or chats stored in class fields are reported as TODOs, not tracked.
 - Request-object calls such as `generateContent({ contents })` and `embedContent({ content, taskType })` are reported as `dynamic-model-params`.
@@ -317,7 +317,7 @@ npm install
 npm test
 ```
 
-CI runs on Linux with Node.js 22 and 24 on every push, and on macOS as well once the repository is public.
+CI runs on Linux with the latest Node.js LTS (`lts/*`) on every push and pull request, and weekly on Mondays. The package itself supports Node.js 22 or newer; running the tests needs Node.js 22.12 or newer.
 
 Report bugs and ideas as issues. Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
