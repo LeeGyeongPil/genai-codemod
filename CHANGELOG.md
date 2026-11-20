@@ -3,7 +3,10 @@
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.1.6] - 2026-11-21
+
+### Changed
+- The CI workflow no longer sets `permissions: contents: read` or `timeout-minutes` (it follows the standard template). CI is back to a single Linux job on the current Node.js LTS (`node-version: lts/*`) with `actions/checkout@v4` and `actions/setup-node@v4`: `npm ci`, the native TypeScript compiler check, `npm test` (mock mode) and the build. The OS × Node.js matrix, the job time limit, the version print step and the separate `npm start` step are removed; `npm test` already runs the demo script and fails if it does not exit cleanly. Node.js 22 and newer stay supported (`engines.node >=22`), but CI no longer runs Node.js 22 and 24 on every push.
 
 ## [0.1.5] - 2026-11-20
 
